@@ -324,7 +324,7 @@ type Processor struct {
 	subProcessors string
 	// TDPWatts shall be the nominal Thermal
 	// Design Power (TDP) in watts.
-	TDPWatts int
+	TDPWatts json.Number
 	// TotalCores shall indicate the total count of
 	// independent processor cores contained within this processor.
 	TotalCores int
@@ -502,7 +502,7 @@ type ProcessorID struct {
 	MicrocodeInfo string
 	// Step shall indicate the Step or revision string
 	// information as provided by the manufacturer of this processor.
-	Step string
+	Step interface{}
 	// VendorID shall indicate the Vendor Identification
 	// string information as provided by the manufacturer of this processor.
 	VendorID string `json:"VendorId"`
