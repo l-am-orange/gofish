@@ -315,7 +315,7 @@ type Processor struct {
 	ProcessorType ProcessorType
 	// Socket shall contain the string which identifies the
 	// physical location or socket of the processor.
-	Socket string
+	Socket interface{}
 	// Status shall contain any status or health properties
 	// of the resource.
 	Status common.Status
