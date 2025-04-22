@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stmcginnis/gofish/redfish"
+	"github.com/l-am-orange/gofish/redfish"
 )
 
 var chassisBody = `{

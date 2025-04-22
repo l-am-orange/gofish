@@ -7,7 +7,7 @@ package redfish
 import (
 	"encoding/json"
 
-	"github.com/stmcginnis/gofish/common"
+	"github.com/l-am-orange/gofish/common"
 )
 
 // CompositionReservation This resource represents the composition reservation of the composition service for a

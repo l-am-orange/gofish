@@ -9,7 +9,7 @@ import (
 	"reflect"
 	"strconv"
 
-	"github.com/stmcginnis/gofish/common"
+	"github.com/l-am-orange/gofish/common"
 )
 
 // The state of the base frequency settings of

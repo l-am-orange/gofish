@@ -7,7 +7,7 @@ package smc
 import (
 	"encoding/json"
 
-	"github.com/stmcginnis/gofish/redfish"
+	"github.com/l-am-orange/gofish/redfish"
 )
 
 // AccountService is a Supermicro OEM instance of an AccountService.

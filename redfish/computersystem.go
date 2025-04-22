@@ -10,7 +10,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/stmcginnis/gofish/common"
+	"github.com/l-am-orange/gofish/common"
 )
 
 type AutomaticRetryConfig string

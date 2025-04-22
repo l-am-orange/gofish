@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"reflect"
 
-	"github.com/stmcginnis/gofish/common"
+	"github.com/l-am-orange/gofish/common"
 )
 
 // FanMode is an instance of a FanMode object.

@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"reflect"
 
-	"github.com/stmcginnis/gofish/common"
+	"github.com/l-am-orange/gofish/common"
 )
 
 // AggregationService shall represent an aggregation service for a Redfish implementation.

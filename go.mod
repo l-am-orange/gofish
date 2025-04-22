@@ -1,3 +1,3 @@
-module github.com/stmcginnis/gofish
+module github.com/l-am-orange/gofish
 
 go 1.21

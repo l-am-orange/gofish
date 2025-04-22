@@ -7,7 +7,7 @@ package redfish
 import (
 	"encoding/json"
 
-	"github.com/stmcginnis/gofish/common"
+	"github.com/l-am-orange/gofish/common"
 )
 
 // EthernetNetworkDeviceFunctionMetrics shall describe the Ethernet-related network function metrics.

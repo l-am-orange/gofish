@@ -5,7 +5,7 @@
 package smc
 
 import (
-	"github.com/stmcginnis/gofish/common"
+	"github.com/l-am-orange/gofish/common"
 )
 
 // FixedBootOrder is the fixed boot order information associated with the system.

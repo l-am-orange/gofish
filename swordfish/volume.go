@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/stmcginnis/gofish/common"
-	"github.com/stmcginnis/gofish/redfish"
+	"github.com/l-am-orange/gofish/common"
+	"github.com/l-am-orange/gofish/redfish"
 )
 
 type ALUA struct {

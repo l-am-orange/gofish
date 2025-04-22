@@ -9,7 +9,7 @@ import (
 	"errors"
 	"reflect"
 
-	"github.com/stmcginnis/gofish/common"
+	"github.com/l-am-orange/gofish/common"
 )
 
 // LicenseService shall represent a license service and the properties that affect the service itself for a Redfish

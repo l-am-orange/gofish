@@ -7,8 +7,8 @@ package ami
 import (
 	"encoding/json"
 
-	"github.com/stmcginnis/gofish/common"
-	"github.com/stmcginnis/gofish/redfish"
+	"github.com/l-am-orange/gofish/common"
+	"github.com/l-am-orange/gofish/redfish"
 )
 
 // EventService is an AMI OEM instance of an EventService.

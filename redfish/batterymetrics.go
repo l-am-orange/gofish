@@ -5,7 +5,7 @@
 package redfish
 
 import (
-	"github.com/stmcginnis/gofish/common"
+	"github.com/l-am-orange/gofish/common"
 )
 
 // BatteryMetrics shall be used to represent the metrics of a battery unit for a Redfish implementation.

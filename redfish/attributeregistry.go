@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"math/big"
 
-	"github.com/stmcginnis/gofish/common"
+	"github.com/l-am-orange/gofish/common"
 )
 
 type AttributeType string
