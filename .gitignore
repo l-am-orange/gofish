@@ -8,7 +8,7 @@
 # git config --global core.excludesfile '~/.gitignore'
 #
 # https://help.github.com/articles/ignoring-files/#create-a-global-gitignore
-
+.idea/*
 gofish
 bin/*
 **/env/*
