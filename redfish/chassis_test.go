@@ -39,9 +39,6 @@ var chassisBody = `{
 		"Assembly": {
 			"@odata.id": "/redfish/v1/Chassis/Chassis-1/Assembly"
 		},
-		"Controls": {
-			"@odata.id": "/redfish/v1/Chassis/Chassis-1/Controls"
-		},
 		"Drives": {
 			"@odata.id": "/redfish/v1/Chassis/Chassis-1/Drives"
 		},
@@ -156,10 +153,6 @@ func TestChassis(t *testing.T) {
 
 	if result.assembly != "/redfish/v1/Chassis/Chassis-1/Assembly" {
 		t.Errorf("Received invalid assembly reference: %s", result.assembly)
-	}
-
-	if result.controls != "/redfish/v1/Chassis/Chassis-1/Controls" {
-		t.Errorf("Received invalid controls reference: %s", result.controls)
 	}
 
 	if result.drives != "/redfish/v1/Chassis/Chassis-1/Drives" {

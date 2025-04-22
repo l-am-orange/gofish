@@ -5,6 +5,7 @@
 package zt
 
 import (
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -173,6 +174,7 @@ func TestSubscribeZT(t *testing.T) {
 		if req.Method == http.MethodGet &&
 			req.URL.String() == redfishBaseURL &&
 			requestCounter < 2 { // ServiceRoot
+			log.Printf("Mock received login request")
 			contentType := req.Header.Get("Content-Type")
 			if contentType != "application/json" {
 				t.Errorf("gofish connect sent wrong header. Content-Type:"+
@@ -188,12 +190,16 @@ func TestSubscribeZT(t *testing.T) {
 		} else if req.Method == http.MethodGet && // Get event service
 			req.URL.String() == "/redfish/v1/EventService" &&
 			requestCounter == 2 {
+			log.Printf("Getting event service")
+
 			requestCounter++
 
 			rw.Write([]byte(eventServiceBody)) //nolint:errcheck
 		} else if req.Method == http.MethodPost && // Subscribe
 			req.URL.String() == "/redfish/v1/EventService/Subscriptions" &&
 			requestCounter == 3 {
+			log.Printf("Mock got suscription POST")
+
 			requestCounter++
 
 			rw.Write([]byte(subscribeResponseBody)) //nolint:errcheck

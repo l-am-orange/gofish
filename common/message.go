@@ -4,6 +4,10 @@
 
 package common
 
+import (
+	"encoding/json"
+)
+
 // Message is This type shall define a Message as described in the
 // Redfish specification.
 type Message struct {
@@ -33,11 +37,62 @@ type Message struct {
 
 // GetMessage will get a Message instance from the service.
 func GetMessage(c Client, uri string) (*Message, error) {
-	return GetObject[Message](c, uri)
+	resp, err := c.Get(uri)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var message Message
+	err = json.NewDecoder(resp.Body).Decode(&message)
+	if err != nil {
+		return nil, err
+	}
+
+	message.SetClient(c)
+	return &message, nil
 }
 
 // ListReferencedMessages gets the collection of Message from
 // a provided reference.
 func ListReferencedMessages(c Client, link string) ([]*Message, error) {
-	return GetCollectionObjects[Message](c, link)
+	var result []*Message
+	if link == "" {
+		return result, nil
+	}
+
+	type GetResult struct {
+		Item  *Message
+		Link  string
+		Error error
+	}
+
+	ch := make(chan GetResult)
+	collectionError := NewCollectionError()
+	get := func(link string) {
+		message, err := GetMessage(c, link)
+		ch <- GetResult{Item: message, Link: link, Error: err}
+	}
+
+	go func() {
+		err := CollectList(get, c, link)
+		if err != nil {
+			collectionError.Failures[link] = err
+		}
+		close(ch)
+	}()
+
+	for r := range ch {
+		if r.Error != nil {
+			collectionError.Failures[r.Link] = r.Error
+		} else {
+			result = append(result, r.Item)
+		}
+	}
+
+	if collectionError.Empty() {
+		return result, nil
+	}
+
+	return result, collectionError
 }

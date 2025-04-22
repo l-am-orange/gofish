@@ -32,31 +32,21 @@ const (
 
 // CHAPInformation is used for CHAP auth.
 type CHAPInformation struct {
-	// CHAPPassword shall be the password when CHAP authentication is specified.
-	CHAPPassword string
-	// CHAPUser shall be the username when CHAP authentication is specified.
-	CHAPUser string
-	// InitiatorCHAPPassword shall be the shared secret for Mutual (2-way) CHAP
-	// authentication.
+	// InitiatorCHAPPassword shall be the
+	// shared secret for CHAP authentication.
 	InitiatorCHAPPassword string
-	// InitiatorCHAPUser If present, this property is the initiator CHAP username
-	// for Mutual (2-way) authentication. For example, with an iSCSI scenario,
-	// use the initiator iQN.
+	// InitiatorCHAPUser is If present, this property is the initiator CHAP
+	// username for authentication. For example, with an iSCSI scenario, use
+	// the initiator iQN.
 	InitiatorCHAPUser string
-	// TargetCHAPPassword shall be the CHAP Secret for 2-way CHAP authentication.
-	TargetCHAPPassword string
-	// TargetCHAPUser shall be the Target CHAP Username for Mutual (2-way) CHAP
-	// authentication. For example, with an iSCSI scenario, use the target iQN.
+	// TargetCHAPUser shall be the CHAP
+	// Username for 2-way CHAP authentication. For example, with an iSCSI
+	// scenario, use the target iQN. In a FC with DHCHAP, this value will be
+	// a FC WWN.
 	TargetCHAPUser string
-}
-
-// DHCHAPInformation User name and password values for target and initiator
-// endpoints when CHAP authentication is used.
-type DHCHAPInformation struct {
-	// LocalDHCHAPAuthSecret shall be the local DHCHAP auth secret for DHCHAP authentication.
-	LocalDHCHAPAuthSecret string
-	// PeerDHCHAPAuthSecret shall be the peer DHCHAP auth secret for DHCHAP authentication.
-	PeerDHCHAPAuthSecret string
+	// TargetPassword shall be the CHAP Secret
+	// for 2-way CHAP authentication.
+	TargetPassword string
 }
 
 // StorageGroup is a set of related storage entities (volumes, file systems...)
@@ -100,7 +90,6 @@ type StorageGroup struct {
 	MappedVolumes []MappedVolume
 	// MembersAreConsistent shall be set to true if all members are in a
 	// consistent state. The default value for this property is false.
-	// Deprecated in favor of using the ConsistencyGroup for Consistency set management.
 	MembersAreConsistent bool
 	// ReplicaInfo shall describe the replication relationship between this
 	// storage group and a corresponding source storage group.
@@ -121,15 +110,11 @@ type StorageGroup struct {
 	// Status is the status of this group.
 	Status common.Status
 	// VolumesCount is the number of volumes.
-	// These references are replaced by the MappedVolumes array in StorageGroup.
 	VolumesCount int `json:"Volumes@odata.count"`
 	// VolumesAreExposed shall be set to true if storage volumes are exposed to
 	// the paths defined by the client and server endpoints. The default value
 	// for this property is false.
 	VolumesAreExposed bool
-	// rawData holds the original serialized JSON so we can compare updates.
-	rawData []byte
-
 	// ChildStorageGroups is an array of references to StorageGroups are
 	// incorporated into this StorageGroup
 	childStorageGroups []string
@@ -143,11 +128,12 @@ type StorageGroup struct {
 	parentStorageGroups []string
 	// ParentStorageGroupsCount is the number of parent storage groups.
 	ParentStorageGroupsCount int
-
 	// exposeVolumesTarget is the URL to for the ExposeVolumes action.
 	exposeVolumesTarget string
 	// hideVolumesTarget is the URL to for the HideVolumes action.
 	hideVolumesTarget string
+	// rawData holds the original serialized JSON so we can compare updates.
+	rawData []byte
 }
 
 // UnmarshalJSON unmarshals a StorageGroup object from the raw JSON.
@@ -161,8 +147,12 @@ func (storagegroup *StorageGroup) UnmarshalJSON(b []byte) error {
 		ParentStorageGroupsCount int `json:"ParentStorageGroups@odata.count"`
 	}
 	type actions struct {
-		ExposeVolumes common.ActionTarget `json:"#StorageGroup.ExposeVolumes"`
-		HideVolumes   common.ActionTarget `json:"#StorageGroup.HideVolumes"`
+		ExposeVolumes struct {
+			Target string
+		} `json:"#StorageGroup.ExposeVolumes"`
+		HideVolumes struct {
+			Target string
+		} `json:"#StorageGroup.HideVolumes"`
 	}
 	var t struct {
 		temp
@@ -183,7 +173,6 @@ func (storagegroup *StorageGroup) UnmarshalJSON(b []byte) error {
 	storagegroup.classOfService = t.Links.ClassOfService.String()
 	storagegroup.parentStorageGroups = t.Links.ParentStorageGroups.ToStrings()
 	storagegroup.ParentStorageGroupsCount = t.Links.ParentStorageGroupsCount
-
 	storagegroup.exposeVolumesTarget = t.Actions.ExposeVolumes.Target
 	storagegroup.hideVolumesTarget = t.Actions.HideVolumes.Target
 
@@ -219,23 +208,94 @@ func (storagegroup *StorageGroup) Update() error {
 
 // GetStorageGroup will get a StorageGroup instance from the service.
 func GetStorageGroup(c common.Client, uri string) (*StorageGroup, error) {
-	return common.GetObject[StorageGroup](c, uri)
+	var storageGroup StorageGroup
+	return &storageGroup, storageGroup.Get(c, uri, &storageGroup)
 }
 
 // ListReferencedStorageGroups gets the collection of StorageGroup from
 // a provided reference.
-func ListReferencedStorageGroups(c common.Client, link string) ([]*StorageGroup, error) {
-	return common.GetCollectionObjects[StorageGroup](c, link)
+func ListReferencedStorageGroups(c common.Client, link string) ([]*StorageGroup, error) { //nolint:dupl
+	var result []*StorageGroup
+	if link == "" {
+		return result, nil
+	}
+
+	type GetResult struct {
+		Item  *StorageGroup
+		Link  string
+		Error error
+	}
+
+	ch := make(chan GetResult)
+	collectionError := common.NewCollectionError()
+	get := func(link string) {
+		storagegroup, err := GetStorageGroup(c, link)
+		ch <- GetResult{Item: storagegroup, Link: link, Error: err}
+	}
+
+	go func() {
+		err := common.CollectList(get, c, link)
+		if err != nil {
+			collectionError.Failures[link] = err
+		}
+		close(ch)
+	}()
+
+	for r := range ch {
+		if r.Error != nil {
+			collectionError.Failures[r.Link] = r.Error
+		} else {
+			result = append(result, r.Item)
+		}
+	}
+
+	if collectionError.Empty() {
+		return result, nil
+	}
+
+	return result, collectionError
 }
 
 // ChildStorageGroups gets child groups of this group.
 func (storagegroup *StorageGroup) ChildStorageGroups() ([]*StorageGroup, error) {
-	return common.GetObjects[StorageGroup](storagegroup.GetClient(), storagegroup.childStorageGroups)
+	var result []*StorageGroup
+
+	collectionError := common.NewCollectionError()
+	for _, sgLink := range storagegroup.childStorageGroups {
+		sg, err := GetStorageGroup(storagegroup.Client, sgLink)
+		if err != nil {
+			collectionError.Failures[sgLink] = err
+		} else {
+			result = append(result, sg)
+		}
+	}
+
+	if collectionError.Empty() {
+		return result, nil
+	}
+
+	return result, collectionError
 }
 
 // ParentStorageGroups gets parent groups of this group.
 func (storagegroup *StorageGroup) ParentStorageGroups() ([]*StorageGroup, error) {
-	return common.GetObjects[StorageGroup](storagegroup.GetClient(), storagegroup.parentStorageGroups)
+	var result []*StorageGroup
+
+	collectionError := common.NewCollectionError()
+	for _, sgLink := range storagegroup.parentStorageGroups {
+		sg, err := GetStorageGroup(storagegroup.Client, sgLink)
+		if err != nil {
+			collectionError.Failures[sgLink] = err
+		} else {
+			result = append(result, sg)
+		}
+	}
+
+	if collectionError.Empty() {
+		return result, nil
+	}
+
+	return result, collectionError
 }
 
 // ClassOfService gets the ClassOfService that all storage in this StorageGroup
@@ -244,7 +304,7 @@ func (storagegroup *StorageGroup) ClassOfService() (*ClassOfService, error) {
 	if storagegroup.classOfService == "" {
 		return nil, nil
 	}
-	return GetClassOfService(storagegroup.GetClient(), storagegroup.classOfService)
+	return GetClassOfService(storagegroup.Client, storagegroup.classOfService)
 }
 
 // MappedVolume is an exposed volume mapping.

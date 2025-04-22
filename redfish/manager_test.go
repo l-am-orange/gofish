@@ -227,9 +227,6 @@ var managerBody = `{
 				"SSH"
 			]
 		},
-		"SharedNetworkPorts": {
-		  "@odata.id": "/redfish/v1/Managers/1/SharedNetworkPorts"
-		},
 		"FirmwareVersion": "1.00",
 		"RemoteAccountService": {
 			"@odata.id": "/redfish/v1/Managers/AccountService"
@@ -380,50 +377,5 @@ func TestManagerUpdate(t *testing.T) {
 
 	if !strings.Contains(calls[0].Payload, "DateTimeLocalOffset:+05:00") {
 		t.Errorf("Unexpected DateTimeLocalOffset update payload: %s", calls[0].Payload)
-	}
-}
-
-func TestManagerReset(t *testing.T) {
-	var result Manager
-	err := json.NewDecoder(strings.NewReader(managerBody)).Decode(&result)
-
-	if err != nil {
-		t.Errorf("Error decoding JSON: %s", err)
-	}
-
-	testClient := &common.TestClient{}
-	result.SetClient(testClient)
-
-	// happy path
-	result.SupportedResetTypes = []ResetType{GracefulRestartResetType}
-	err = result.Reset(GracefulRestartResetType)
-	if err != nil {
-		t.Errorf("Error making Reset call: %s", err)
-	}
-
-	calls := testClient.CapturedCalls()
-
-	if !strings.Contains(calls[0].Payload, "ResetType:GracefulRestart") {
-		t.Errorf("Unexpected ResetType in payload: %s", calls[0].Payload)
-	}
-
-	// expect error when use non-supported reset type
-	result.SupportedResetTypes = []ResetType{GracefulRestartResetType}
-	err = result.Reset(ForceRestartResetType)
-	if err == nil {
-		t.Errorf("No error when expected on Reset call: %s", err)
-	}
-
-	// expect empty payload when no allowed reset types
-	result.SupportedResetTypes = []ResetType{}
-	err = result.Reset(GracefulRestartResetType)
-	if err != nil {
-		t.Errorf("Error making Reset call: %s", err)
-	}
-
-	calls = testClient.CapturedCalls()
-
-	if calls[1].Payload != "map[]" {
-		t.Errorf("Unexpected payload: %s", calls[1].Payload)
 	}
 }

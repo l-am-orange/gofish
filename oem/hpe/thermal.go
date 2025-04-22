@@ -11,7 +11,7 @@ import (
 )
 
 type Fan struct {
-	redfish.ThermalFan
+	redfish.Fan
 	Oem FanOem
 }
 
@@ -63,13 +63,13 @@ func FromThermal(thermal *redfish.Thermal) (Thermal, error) {
 	}, nil
 }
 
-func FromFan(fan *redfish.ThermalFan) (Fan, error) {
+func FromFan(fan *redfish.Fan) (Fan, error) {
 	oem := FanOem{}
 
-	_ = json.Unmarshal(fan.OEM, &oem)
+	_ = json.Unmarshal(fan.Oem, &oem)
 
 	return Fan{
-		ThermalFan: *fan,
-		Oem:        oem,
+		Fan: *fan,
+		Oem: oem,
 	}, nil
 }

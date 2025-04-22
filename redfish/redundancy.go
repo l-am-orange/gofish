@@ -115,62 +115,50 @@ func (redundancy *Redundancy) Update() error {
 
 // GetRedundancy will get a Redundancy instance from the service.
 func GetRedundancy(c common.Client, uri string) (*Redundancy, error) {
-	return common.GetObject[Redundancy](c, uri)
+	var redundancy Redundancy
+	return &redundancy, redundancy.Get(c, uri, &redundancy)
 }
 
 // ListReferencedRedundancies gets the collection of Redundancy from
 // a provided reference.
-func ListReferencedRedundancies(c common.Client, link string) ([]*Redundancy, error) {
-	return common.GetCollectionObjects[Redundancy](c, link)
-}
-
-// The redundancy mode of the group.
-type RedundancyType string
-
-const (
-	// Failure of one unit automatically causes a standby or offline unit in the redundancy set to take over its functions.
-	FailoverRedundancyType RedundancyType = "Failover"
-	// Multiple units are available and active such that normal operation will continue if one or more units fail.
-	NPlusMRedundancyType RedundancyType = "NPlusM"
-	// The subsystem is not configured in a redundancy mode, either due to configuration or the functionality has been disabled by the user.
-	NotRedundantRedundancyType RedundancyType = "NotRedundant"
-	//  Multiple units contribute or share such that operation will continue, but at a reduced capacity, if one or more units fail.
-	SharingRedundancyType RedundancyType = "Sharing"
-	// One or more spare units are available to take over the function of a failed unit, but takeover is not automatic.
-	SparingRedundancyType RedundancyType = "Sparing"
-)
-
-// The redundancy information for the devices in a redundancy group.
-type RedundantGroup struct {
-	// The maximum number of devices supported in this redundancy group.
-	MaxSupportedInGroup int64
-	// The minimum number of devices needed for this group to be redundant.
-	MinNeededInGroup int64
-	// The links to the devices included in this redundancy group.
-	redundancyGroup []string
-	// RedundancyGroupCount is the number of redundancy groups in this group.
-	RedundancyGroupCount int `json:"RedundancyGroup@odata.count"`
-	// The redundancy mode of the group.
-	RedundancyType RedundancyType
-	// The status and health of the resource and its subordinate or dependent resources
-	Status common.Status
-}
-
-// UnmarshalJSON unmarshals a RedundancyGroup object from the raw JSON.
-func (redundantGroup *RedundantGroup) UnmarshalJSON(b []byte) error {
-	type temp RedundantGroup
-
-	var t struct {
-		temp
-		RedundancyGroup common.Links
+func ListReferencedRedundancies(c common.Client, link string) ([]*Redundancy, error) { //nolint:dupl
+	var result []*Redundancy
+	if link == "" {
+		return result, nil
 	}
 
-	if err := json.Unmarshal(b, &t); err != nil {
-		return err
+	type GetResult struct {
+		Item  *Redundancy
+		Link  string
+		Error error
 	}
 
-	*redundantGroup = RedundantGroup(t.temp)
-	redundantGroup.redundancyGroup = t.RedundancyGroup.ToStrings()
+	ch := make(chan GetResult)
+	collectionError := common.NewCollectionError()
+	get := func(link string) {
+		redundancy, err := GetRedundancy(c, link)
+		ch <- GetResult{Item: redundancy, Link: link, Error: err}
+	}
 
-	return nil
+	go func() {
+		err := common.CollectList(get, c, link)
+		if err != nil {
+			collectionError.Failures[link] = err
+		}
+		close(ch)
+	}()
+
+	for r := range ch {
+		if r.Error != nil {
+			collectionError.Failures[r.Link] = r.Error
+		} else {
+			result = append(result, r.Item)
+		}
+	}
+
+	if collectionError.Empty() {
+		return result, nil
+	}
+
+	return result, collectionError
 }

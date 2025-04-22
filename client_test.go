@@ -10,6 +10,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -47,7 +48,7 @@ const (
 )
 
 func testError(code int, t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(code)
 		w.Write([]byte(expectErrorStatus)) //nolint
 	}))
@@ -85,7 +86,7 @@ func TestError404(t *testing.T) {
 
 // TestErrorOther tests failures that do not return an Error struct
 func TestErrorOther(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(500)
 		w.Write([]byte(nonErrorStructErrorStatus)) //nolint
 	}))
@@ -189,7 +190,7 @@ func TestConnectDefaultContextCancel(t *testing.T) {
 }
 
 func TestClientRunRawRequestNoURL(t *testing.T) {
-	client := APIClient{sem: make(chan bool, 1)}
+	client := APIClient{mu: &sync.Mutex{}}
 
 	_, err := client.runRawRequest("", "", nil, "") //nolint:bodyclose
 	if err == nil {

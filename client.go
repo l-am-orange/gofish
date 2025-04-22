@@ -19,6 +19,8 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
+
 	"strings"
 	"time"
 
@@ -47,14 +49,11 @@ type APIClient struct {
 	// Auth information saved for later to be able to log out
 	auth *redfish.AuthToken
 
-	// sem used to limit number of concurrent requests
-	sem chan bool
+	// mu used to lock requests
+	mu *sync.Mutex
 
 	// dumpWriter will receive HTTP dumps if non-nil.
 	dumpWriter io.Writer
-
-	// keepAlive is a flag to indicate if we should try to keep idle connections open
-	keepAlive bool
 }
 
 // Session holds the session ID and auth token needed to identify an
@@ -94,13 +93,6 @@ type ClientConfig struct {
 
 	// BasicAuth tells the APIClient if basic auth should be used (true) or token based auth must be used (false)
 	BasicAuth bool
-
-	// The maximum number of concurrent HTTP requests that will be made (default: 1)
-	MaxConcurrentRequests int64
-
-	// ReuseConnections can be useful if executing a lot of requests. Setting to `true` allows
-	// the TCP sessions to remain open and reused betweeen subsequent calls.
-	ReuseConnections bool
 }
 
 // setupClientWithConfig setups the client using the client config
@@ -113,12 +105,7 @@ func setupClientWithConfig(ctx context.Context, config *ClientConfig) (c *APICli
 		endpoint:   config.Endpoint,
 		dumpWriter: config.DumpWriter,
 		ctx:        ctx,
-	}
-
-	if config.MaxConcurrentRequests <= 0 {
-		client.sem = make(chan bool, 1)
-	} else {
-		client.sem = make(chan bool, config.MaxConcurrentRequests)
+		mu:         &sync.Mutex{},
 	}
 
 	if config.TLSHandshakeTimeout == 0 {
@@ -138,18 +125,8 @@ func setupClientWithConfig(ctx context.Context, config *ClientConfig) (c *APICli
 				InsecureSkipVerify: config.Insecure,
 			},
 		}
-
-		if config.ReuseConnections {
-			client.keepAlive = true
-			transport.DisableKeepAlives = false
-			transport.IdleConnTimeout = 1 * time.Minute
-		}
-
 		client.HTTPClient = &http.Client{Transport: transport}
 	} else {
-		if config.ReuseConnections {
-			client.keepAlive = true
-		}
 		client.HTTPClient = config.HTTPClient
 	}
 
@@ -171,7 +148,7 @@ func setupClientWithEndpoint(ctx context.Context, endpoint string) (c *APIClient
 	client := &APIClient{
 		endpoint: endpoint,
 		ctx:      ctx,
-		sem:      make(chan bool, 1),
+		mu:       &sync.Mutex{},
 	}
 	client.HTTPClient = &http.Client{}
 
@@ -289,21 +266,6 @@ func (c *APIClient) GetSession() (*Session, error) {
 		ID:    c.auth.Session,
 		Token: c.auth.Token,
 	}, nil
-}
-
-// Get performs a HEAD request against the Redfish service.
-func (c *APIClient) Head(url string) (*http.Response, error) {
-	return c.HeadWithHeaders(url, nil)
-}
-
-// GetWithHeaders performs a HEAD request against the Redfish service but allowing custom headers
-func (c *APIClient) HeadWithHeaders(url string, customHeaders map[string]string) (*http.Response, error) {
-	relativePath := url
-	if relativePath == "" {
-		relativePath = common.DefaultServiceRoot
-	}
-
-	return c.runRequestWithHeaders(http.MethodHead, relativePath, nil, customHeaders)
 }
 
 // Get performs a GET request against the Redfish service.
@@ -452,21 +414,6 @@ func (c *APIClient) RunRawRequestWithHeaders(method, url string, payloadBuffer i
 	return c.runRawRequestWithHeaders(method, url, payloadBuffer, contentType, customHeaders)
 }
 
-// acquireSemaphore blocks until either the http concurrency semaphore is acquired or the context is cancelled
-func (c *APIClient) acquireSemaphore() error {
-	select {
-	case <-c.ctx.Done():
-		return c.ctx.Err()
-	case c.sem <- true:
-		return nil
-	}
-}
-
-// releaseSemaphore releases the http concurrency semaphore
-func (c *APIClient) releaseSemaphore() {
-	<-c.sem
-}
-
 // runRawRequestWithHeaders actually performs the REST calls but allowing custom headers
 func (c *APIClient) runRawRequestWithHeaders(method, url string, payloadBuffer io.ReadSeeker, contentType string, customHeaders map[string]string) (*http.Response, error) {
 	if url == "" {
@@ -517,12 +464,7 @@ func (c *APIClient) runRawRequestWithHeaders(method, url string, payloadBuffer i
 			req.Header.Set("Authorization", fmt.Sprintf("Basic %v", encodedAuth))
 		}
 	}
-
 	req.Close = true
-	if c.keepAlive {
-		req.Close = false
-		req.Header.Add("Connection", "keep-alive")
-	}
 
 	// Dump request if needed.
 	if c.dumpWriter != nil {
@@ -530,12 +472,9 @@ func (c *APIClient) runRawRequestWithHeaders(method, url string, payloadBuffer i
 			return nil, err
 		}
 	}
-
-	if err := c.acquireSemaphore(); err != nil {
-		return nil, err
-	}
+	c.mu.Lock()
 	resp, err := c.HTTPClient.Do(req)
-	c.releaseSemaphore()
+	c.mu.Unlock()
 	if err != nil {
 		return nil, err
 	}
@@ -595,20 +534,8 @@ func (c *APIClient) dumpResponse(resp *http.Response) error {
 // Logout will delete any active session. Useful to defer logout when creating
 // a new connection.
 func (c *APIClient) Logout() {
-	if c != nil && c.Service != nil && c.auth != nil {
-		// if APIClient is created with ConnectContext (f.e. with http request ctx)
-		// and passed context is cancelled (f.e. downstream request is aborted),
-		// we need to create a new context to clean up Redfish API session
-		if c.ctx.Err() != nil {
-			c.ctx = context.Background()
-		}
-		if err := c.Service.DeleteSession(c.auth.Session); err == nil {
-			// Clean up invalid session token and ID upon successful Logout
-			c.auth.Session = ""
-			c.auth.Token = ""
-		}
-
-		c.HTTPClient.CloseIdleConnections()
+	if c.Service != nil && c.auth != nil {
+		_ = c.Service.DeleteSession(c.auth.Session)
 	}
 }
 

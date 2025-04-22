@@ -115,7 +115,9 @@ func TestHostInterfaceUpdate(t *testing.T) {
 	// TODO: Need to handle converted names
 	// result.AuthNoneRoleID = "role-test"
 	// result.FirmwareAuthRoleID = "role-1"
-	result.InterfaceEnabled = false
+	result.FirmwareAuthEnabled = true
+	result.InterfaceEnabled = true
+	result.KernelAuthEnabled = true
 	err = result.Update()
 
 	if err != nil {
@@ -124,11 +126,15 @@ func TestHostInterfaceUpdate(t *testing.T) {
 
 	calls := testClient.CapturedCalls()
 
-	if len(calls) != 1 {
-		t.Errorf("Expected 1 API call, found %d", len(calls))
+	if !strings.Contains(calls[0].Payload, "FirmwareAuthEnabled:true") {
+		t.Errorf("Unexpected FirmwareAuthEnabled update payload: %s", calls[0].Payload)
 	}
 
-	if !strings.Contains(calls[0].Payload, "InterfaceEnabled") {
+	if strings.Contains(calls[0].Payload, "InterfaceEnabled") {
 		t.Errorf("Unexpected InterfaceEnabled update payload: %s", calls[0].Payload)
+	}
+
+	if !strings.Contains(calls[0].Payload, "KernelAuthEnabled:true") {
+		t.Errorf("Unexpected KernelAuthEnabled update payload: %s", calls[0].Payload)
 	}
 }

@@ -88,12 +88,8 @@ var powerBody = strings.NewReader(
 			"PowerInputWatts": 100,
 			"PowerOutputWatts": 100,
 			"PowerSupplyType": "ACorDC",
-			"Redundancy": [
-				{
-				"@odata.id": "/redfish/v1/Chassis/1/Power#/Redundancy/0"
-				}
-			],
-			"Redundancy@odata.count": 1,
+			"Redundancy": [],
+			"Redundancy@odata.count": 0,
 			"RelatedItems": [],
 			"RelatedItems@odata.count": 0,
 			"SerialNumber": "1234",
@@ -104,30 +100,8 @@ var powerBody = strings.NewReader(
 			}
 		}],
 		"PowerSupplies@odata.count": 1,
-		"Redundancy": [
-		{
-			"@odata.id": "/redfish/v1/Chassis/1/Power#/Redundancy/0",
-			"@odata.type": "#Redundancy.v1_2_0.Redundancy",
-			"MemberId": "0",
-			"Name": "PowerSupply Redundancy Group 1",
-			"Mode": "Failover",
-			"MaxNumSupported": 4,
-			"MinNumNeeded": 1,
-			"Status": {
-				"State": "Enabled",
-				"Health": "OK"
-			},
-			"RedundancySet": [
-				{
-				"@odata.id": "/redfish/v1/Chassis/1/Power#/PowerSupplies/0"
-				},
-				{
-				"@odata.id": "/redfish/v1/Chassis/1/Power#/PowerSupplies/1"
-				}
-			]
-			}
-		],
-		"Redundancy@odata.count": 1,
+		"Redundancy": [],
+		"Redundancy@odata.count": 0,
 		"Voltages": [{
 			"@odata.id": "/redfish/v1/Voltage/1",
 			"LowerThresholdCritical": 1.0,

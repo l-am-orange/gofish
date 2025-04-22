@@ -6,9 +6,7 @@ package redfish
 
 import (
 	"encoding/json"
-	"fmt"
 	"reflect"
-	"strings"
 
 	"github.com/l-am-orange/gofish/common"
 )
@@ -26,27 +24,6 @@ const (
 	MultipleLogEntryTypes LogEntryTypes = "Multiple"
 	// OEMLogEntryTypes contains entries in an OEM-defined format.
 	OEMLogEntryTypes LogEntryTypes = "OEM"
-)
-
-type LogPurpose string
-
-const (
-	// DiagnosticLogPurpose provides information for diagnosing hardware or software issues, such as error
-	// conditions, sensor threshold trips, or exception cases.
-	DiagnosticLogPurpose LogPurpose = "Diagnostic"
-	// OperationsLogPurpose provides information about management operations that have a significant impact on
-	// the system, such as firmware updates, system resets, and storage volume creation.
-	OperationsLogPurpose LogPurpose = "Operations"
-	// SecurityLogPurpose provides security-related information such as authentication, authorization, and data
-	// access logging required for security audits.
-	SecurityLogPurpose LogPurpose = "Security"
-	// TelemetryLogPurpose provides telemetry history, typically collected on a regular basis.
-	TelemetryLogPurpose LogPurpose = "Telemetry"
-	// ExternalEntityLogPurpose The log exposes log entries provided by external entities, such as external users,
-	// system firmware, operating systems, or management applications.
-	ExternalEntityLogPurpose LogPurpose = "ExternalEntity"
-	// OEMLogPurpose The log is used for an OEM-defined purpose.
-	OEMLogPurpose LogPurpose = "OEM"
 )
 
 // OverWritePolicy is the log overwriting policy.
@@ -73,9 +50,6 @@ type LogService struct {
 	ODataContext string `json:"@odata.context"`
 	// ODataType is the odata type.
 	ODataType string `json:"@odata.type"`
-	// AutoDSTEnabled shall indicate whether the log service is configured for automatic Daylight Saving Time (DST)
-	// adjustment. DST adjustment shall not modify the timestamp of existing log entries.
-	AutoDSTEnabled bool
 	// DateTime shall represent the current DateTime value that the log service
 	// is using, with offset from UTC, in Redfish Timestamp format.
 	DateTime string
@@ -95,11 +69,6 @@ type LogService struct {
 	// MaxNumberOfRecords shall be the maximum numbers of LogEntry resources in
 	// the Entries collection for this service.
 	MaxNumberOfRecords uint64
-	// OEMLogPurpose shall contain the OEM-specified purpose of the log if LogPurposes contains 'OEM'.
-	OEMLogPurpose string
-	// Oem shall contain the OEM extensions. All values for properties that this object contains shall conform to the
-	// Redfish Specification-described requirements.
-	OEM json.RawMessage `json:"Oem"`
 	// OverWritePolicy shall indicate the
 	// policy of the log service when the MaxNumberOfRecords has been
 	// reached. Unknown indicates the log overwrite policy is unknown.
@@ -108,30 +77,24 @@ type LogService struct {
 	// indicates that the log never overwrites its entries by the new entries
 	// and ceases logging when the limit has been reached.
 	OverWritePolicy OverWritePolicy
-	// Overflow shall indicate whether the log service has overflowed and is no longer able to store new logs.
-	Overflow bool
-	// Persistency shall indicate whether the log service is persistent across a cold reset of the device.
-	Persistency bool
 	// ServiceEnabled shall be a boolean
 	// indicating whether this service is enabled.
 	ServiceEnabled bool
 	// Status shall contain any status or health properties of the resource.
 	Status common.Status
-	// SyslogFilters shall describe all desired syslog messages to be logged locally. If this property contains an
-	// empty array, all messages shall be logged.
-	SyslogFilters []SyslogFilter
-	// rawData holds the original serialized JSON so we can compare updates.
-	rawData []byte
-
 	// clearLogTarget is the URL to send ClearLog actions to.
 	clearLogTarget string
+	// rawData holds the original serialized JSON so we can compare updates.
+	rawData []byte
 }
 
 // UnmarshalJSON unmarshals a LogService object from the raw JSON.
 func (logservice *LogService) UnmarshalJSON(b []byte) error {
 	type temp LogService
 	type Actions struct {
-		ClearLog common.ActionTarget `json:"#LogService.ClearLog"`
+		ClearLog struct {
+			Target string
+		} `json:"#LogService.ClearLog"`
 	}
 	var t struct {
 		temp
@@ -166,7 +129,6 @@ func (logservice *LogService) Update() error {
 	}
 
 	readWriteFields := []string{
-		"AutoDSTEnabled",
 		"DateTime",
 		"DateTimeLocalOffset",
 		"ServiceEnabled",
@@ -180,52 +142,61 @@ func (logservice *LogService) Update() error {
 
 // GetLogService will get a LogService instance from the service.
 func GetLogService(c common.Client, uri string) (*LogService, error) {
-	return common.GetObject[LogService](c, uri)
+	var logService LogService
+	return &logService, logService.Get(c, uri, &logService)
 }
 
 // ListReferencedLogServices gets the collection of LogService from a provided reference.
-func ListReferencedLogServices(c common.Client, link string) ([]*LogService, error) {
-	return common.GetCollectionObjects[LogService](c, link)
+func ListReferencedLogServices(c common.Client, link string) ([]*LogService, error) { //nolint:dupl
+	var result []*LogService
+	if link == "" {
+		return result, nil
+	}
+
+	type GetResult struct {
+		Item  *LogService
+		Link  string
+		Error error
+	}
+
+	ch := make(chan GetResult)
+	collectionError := common.NewCollectionError()
+	get := func(link string) {
+		logservice, err := GetLogService(c, link)
+		ch <- GetResult{Item: logservice, Link: link, Error: err}
+	}
+
+	go func() {
+		err := common.CollectList(get, c, link)
+		if err != nil {
+			collectionError.Failures[link] = err
+		}
+		close(ch)
+	}()
+
+	for r := range ch {
+		if r.Error != nil {
+			collectionError.Failures[r.Link] = r.Error
+		} else {
+			result = append(result, r.Item)
+		}
+	}
+
+	if collectionError.Empty() {
+		return result, nil
+	}
+
+	return result, collectionError
 }
 
 // Entries gets the log entries of this service.
 func (logservice *LogService) Entries() ([]*LogEntry, error) {
-	return ListReferencedLogEntrys(logservice.GetClient(), logservice.entries)
-}
-
-// FilteredEntries gets the log entries of this service with filtering applied (e.g. skip, top).
-func (logservice *LogService) FilteredEntries(options ...common.FilterOption) ([]*LogEntry, error) {
-	var filter common.Filter
-	filter.SetFilter(options...)
-	return ListReferencedLogEntrys(logservice.GetClient(), fmt.Sprintf("%s%s", logservice.entries, filter))
+	return ListReferencedLogEntrys(logservice.Client, logservice.entries)
 }
 
 // ClearLog shall delete all entries found in the Entries collection for this
 // Log Service.
 func (logservice *LogService) ClearLog() error {
-	err := logservice.Post(logservice.clearLogTarget, struct{}{})
-	if err == nil {
-		return nil
-	}
-
-	// As of LogService 1.3.0, need to pass the LogEntryCollection etag. If our first attempt failed, try that.
-	entryCollection := &struct {
-		ETag string `json:"@odata.etag"`
-	}{}
-
-	retryErr := logservice.Get(logservice.GetClient(), logservice.entries, entryCollection)
-	if retryErr == nil {
-		payload := struct {
-			LogEntriesETag string
-		}{LogEntriesETag: strings.Trim(entryCollection.ETag, "\"")}
-
-		retryErr = logservice.Post(logservice.clearLogTarget, payload)
-		if retryErr == nil {
-			return nil
-		}
-	}
-
-	// Fall back to broken implementation to workaround vendor bug
 	t := struct {
 		Action string
 	}{

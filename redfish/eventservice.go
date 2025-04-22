@@ -6,7 +6,7 @@ package redfish
 
 import (
 	"encoding/json"
-	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"time"
@@ -27,10 +27,7 @@ const (
 	MetricReportEventFormatType EventFormatType = "MetricReport"
 )
 
-// EventType is the event type.
-// This property has been deprecated. Starting with Redfish Specification v1.6 (Event v1.3),
-// subscriptions are based on the RegistryPrefix and ResourceType properties and not on the
-// EventType property.
+// EventType is
 type EventType string
 
 const (
@@ -44,21 +41,14 @@ const (
 	ResourceUpdatedEventType EventType = "ResourceUpdated"
 	// StatusChangeEventType indicates the status of this resource has changed.
 	StatusChangeEventType EventType = "StatusChange"
-	// MetricReportEventType indicates the telemetry service is sending a metric report.
-	MetricReportEventType EventType = "MetricReport"
-	// OtherEventType is used to indicate that because EventType is deprecated as of Redfish
-	// Specification v1.6, the event is based on a registry or resource but not an EventType.
-	OtherEventType EventType = "Other"
 )
 
-// IsValidEventType will check if it is a valid EventType.
-// Should remove and leave it to the service to decide if it's valid, but since
-// this is deprecated leaving it in for now.
+// IsValidEventType will check if it is a valid EventType
 func (et EventType) IsValidEventType() bool {
 	switch et {
 	case AlertEventType, ResourceAddedEventType,
 		ResourceRemovedEventType, ResourceUpdatedEventType,
-		StatusChangeEventType, MetricReportEventType, OtherEventType:
+		StatusChangeEventType:
 		return true
 	}
 	return false
@@ -142,15 +132,9 @@ type EventService struct {
 	// destination.  If this property is not present, the EventFormatType
 	// shall be assumed to be Event.
 	EventFormatTypes []EventFormatType
-	// EventTypesForSubscription is the types of Events that can be subscribed to.
-	// This property has been deprecated. Starting with Redfish Specification v1.6 (Event v1.3),
-	// subscriptions are based on the RegistryPrefix and ResourceType properties and not on the EventType property.
+	// EventTypesForSubscription is the types of Events
+	// that can be subscribed to.
 	EventTypesForSubscription []EventType
-	// ExcludeMessageID shall indicate whether this service supports filtering by the ExcludeMessageIds property.
-	ExcludeMessageID bool
-	// ExcludeRegistryPrefix shall indicate whether this service supports filtering by the ExcludeRegistryPrefixes
-	// property.
-	ExcludeRegistryPrefix bool
 	// IncludeOriginOfConditionSupported shall indicate
 	// whether the service supports including the resource payload of the
 	// origin of condition in the event payload.  If `true`, event
@@ -173,9 +157,6 @@ type EventService struct {
 	ServerSentEventURI string `json:"ServerSentEventUri"`
 	// ServiceEnabled shall be a boolean indicating whether this service is enabled.
 	ServiceEnabled bool
-	// Severities shall specify an array of the allowable severities that can be used for an event subscription. If
-	// this property is absent or contains an empty array, the service does not support severity-based subscriptions.
-	Severities []common.Health
 	// Status is This property shall contain any status or health properties of
 	// the resource.
 	Status common.Status
@@ -186,21 +167,19 @@ type EventService struct {
 	// Subscriptions shall contain the link to a collection of type
 	// EventDestination.
 	Subscriptions string
-	// RawData holds the original serialized JSON so we can compare updates.
-	RawData []byte
-
 	// SubmitTestEventTarget is the URL to send SubmitTestEvent actions.
 	SubmitTestEventTarget string
-	// TestEventSubscriptionTarget is the URL to test event using the pre-defined test message.
-	testEventSubscriptionTarget string
+	// RawData holds the original serialized JSON so we can compare updates.
+	RawData []byte
 }
 
 // UnmarshalJSON unmarshals a EventService object from the raw JSON.
 func (eventservice *EventService) UnmarshalJSON(b []byte) error {
 	type temp EventService
 	type Actions struct {
-		SubmitTestEvent       common.ActionTarget `json:"#EventService.SubmitTestEvent"`
-		TestEventSubscription common.ActionTarget `json:"#EventService.TestEventSubscription"`
+		SubmitTestEvent struct {
+			Target string
+		} `json:"#EventService.SubmitTestEvent"`
 	}
 	var t struct {
 		temp
@@ -218,7 +197,6 @@ func (eventservice *EventService) UnmarshalJSON(b []byte) error {
 	// Need to make these publicly available for OEM versions to access
 	eventservice.Subscriptions = t.Subscriptions.String()
 	eventservice.SubmitTestEventTarget = t.Actions.SubmitTestEvent.Target
-	eventservice.testEventSubscriptionTarget = t.Actions.TestEventSubscription.Target
 
 	// This is a read/write object, so we need to save the raw object data for later
 	eventservice.RawData = b
@@ -250,30 +228,66 @@ func (eventservice *EventService) Update() error {
 
 // GetEventService will get a EventService instance from the service.
 func GetEventService(c common.Client, uri string) (*EventService, error) {
-	return common.GetObject[EventService](c, uri)
+	var eventService EventService
+	return &eventService, eventService.Get(c, uri, &eventService)
 }
 
 // ListReferencedEventServices gets the collection of EventService from
 // a provided reference.
-func ListReferencedEventServices(c common.Client, link string) ([]*EventService, error) {
-	return common.GetCollectionObjects[EventService](c, link)
+func ListReferencedEventServices(c common.Client, link string) ([]*EventService, error) { //nolint:dupl
+	var result []*EventService
+	if link == "" {
+		return result, nil
+	}
+
+	type GetResult struct {
+		Item  *EventService
+		Link  string
+		Error error
+	}
+
+	ch := make(chan GetResult)
+	collectionError := common.NewCollectionError()
+	get := func(link string) {
+		eventservice, err := GetEventService(c, link)
+		ch <- GetResult{Item: eventservice, Link: link, Error: err}
+	}
+
+	go func() {
+		err := common.CollectList(get, c, link)
+		if err != nil {
+			collectionError.Failures[link] = err
+		}
+		close(ch)
+	}()
+
+	for r := range ch {
+		if r.Error != nil {
+			collectionError.Failures[r.Link] = r.Error
+		} else {
+			result = append(result, r.Item)
+		}
+	}
+
+	if collectionError.Empty() {
+		return result, nil
+	}
+
+	return result, collectionError
 }
 
 // GetEventSubscriptions gets all the subscriptions using the event service.
 func (eventservice *EventService) GetEventSubscriptions() ([]*EventDestination, error) {
 	if strings.TrimSpace(eventservice.Subscriptions) == "" {
-		return nil, errors.New("empty subscription link in the event service")
+		return nil, fmt.Errorf("empty subscription link in the event service")
 	}
 
-	return ListReferencedEventDestinations(eventservice.GetClient(), eventservice.Subscriptions)
+	return ListReferencedEventDestinations(eventservice.Client, eventservice.Subscriptions)
 }
 
 // GetEventSubscription gets a specific subscription using the event service.
 func (eventservice *EventService) GetEventSubscription(uri string) (*EventDestination, error) {
-	if uri == "" {
-		return nil, errors.New("uri should not be empty")
-	}
-	return GetEventDestination(eventservice.GetClient(), uri)
+	return GetEventDestination(eventservice.Client, uri)
 }
 
 // CreateEventSubscription creates the subscription using the event service.
@@ -300,11 +314,11 @@ func (eventservice *EventService) CreateEventSubscription(
 	oem interface{},
 ) (string, error) {
 	if strings.TrimSpace(eventservice.Subscriptions) == "" {
-		return "", errors.New("empty subscription link in the event service")
+		return "", fmt.Errorf("empty subscription link in the event service")
 	}
 
 	return CreateEventDestination(
-		eventservice.GetClient(),
+		eventservice.Client,
 		eventservice.Subscriptions,
 		destination,
 		eventTypes,
@@ -345,11 +359,11 @@ func (eventservice *EventService) CreateEventSubscriptionInstance(
 	oem interface{},
 ) (string, error) {
 	if strings.TrimSpace(eventservice.Subscriptions) == "" {
-		return "", errors.New("empty subscription link in the event service")
+		return "", fmt.Errorf("empty subscription link in the event service")
 	}
 
 	return CreateEventDestinationInstance(
-		eventservice.GetClient(),
+		eventservice.Client,
 		eventservice.Subscriptions,
 		destination,
 		registryPrefixes,
@@ -364,7 +378,7 @@ func (eventservice *EventService) CreateEventSubscriptionInstance(
 
 // DeleteEventSubscription deletes a specific subscription using the event service.
 func (eventservice *EventService) DeleteEventSubscription(uri string) error {
-	return DeleteEventDestination(eventservice.GetClient(), uri)
+	return DeleteEventDestination(eventservice.Client, uri)
 }
 
 // SubmitTestEvent shall add a test event to the event service with the event
@@ -394,17 +408,6 @@ func (eventservice *EventService) SubmitTestEvent(message string) error {
 	}
 
 	return eventservice.Post(eventservice.SubmitTestEventTarget, t)
-}
-
-// TestEventSubscription will send an event containing the TestMessage message from the
-// Resource Event Message Registry to all appropriate event destinations.
-func (eventservice *EventService) TestEventSubscription() error {
-	if eventservice.testEventSubscriptionTarget == "" {
-		return errors.New("TestEventSubsciption not supported by this service") //nolint:error-strings
-	}
-
-	var payload struct{}
-	return eventservice.Post(eventservice.testEventSubscriptionTarget, payload)
 }
 
 // SSEFilterPropertiesSupported shall contain a set of properties that indicate
@@ -439,6 +442,7 @@ type SSEFilterPropertiesSupported struct {
 
 // SMTP is shall contain settings for SMTP event delivery.
 type SMTP struct {
+
 	// Authentication shall contain the authentication
 	// method for the SMTP server.
 	Authentication SMTPAuthenticationMethods

@@ -85,10 +85,6 @@ type FileShare struct {
 	// {[(SUM(AllocatedBytes) - SUM(ConsumedBytes)]/SUM(AllocatedBytes)}*100
 	// represented as an integer value.
 	RemainingCapacityPercent int
-	// ReplicationEnabled shall indicate whether or not replication is enabled
-	// on the file share. This property shall be consistent with the state
-	// reflected at the storage pool level.
-	ReplicationEnabled bool
 	// RootAccess shall indicate whether Root
 	// access is allowed by the file share. The default value for this
 	// property is false.
@@ -152,7 +148,6 @@ func (fileshare *FileShare) Update() error {
 		"FileShareQuotaType",
 		"FileShareTotalQuotaBytes",
 		"LowSpaceWarningThresholdPercents",
-		"ReplicationEnabled",
 	}
 
 	originalElement := reflect.ValueOf(original).Elem()
@@ -163,13 +158,52 @@ func (fileshare *FileShare) Update() error {
 
 // GetFileShare will get a FileShare instance from the service.
 func GetFileShare(c common.Client, uri string) (*FileShare, error) {
-	return common.GetObject[FileShare](c, uri)
+	var fileShare FileShare
+	return &fileShare, fileShare.Get(c, uri, &fileShare)
 }
 
 // ListReferencedFileShares gets the collection of FileShare from a provided
 // reference.
-func ListReferencedFileShares(c common.Client, link string) ([]*FileShare, error) {
-	return common.GetCollectionObjects[FileShare](c, link)
+func ListReferencedFileShares(c common.Client, link string) ([]*FileShare, error) { //nolint:dupl
+	var result []*FileShare
+	if link == "" {
+		return result, nil
+	}
+
+	type GetResult struct {
+		Item  *FileShare
+		Link  string
+		Error error
+	}
+
+	ch := make(chan GetResult)
+	collectionError := common.NewCollectionError()
+	get := func(link string) {
+		fileshare, err := GetFileShare(c, link)
+		ch <- GetResult{Item: fileshare, Link: link, Error: err}
+	}
+
+	go func() {
+		err := common.CollectList(get, c, link)
+		if err != nil {
+			collectionError.Failures[link] = err
+		}
+		close(ch)
+	}()
+
+	for r := range ch {
+		if r.Error != nil {
+			collectionError.Failures[r.Link] = r.Error
+		} else {
+			result = append(result, r.Item)
+		}
+	}
+
+	if collectionError.Empty() {
+		return result, nil
+	}
+
+	return result, collectionError
 }
 
 // ClassOfService gets the file share's class of service.
@@ -178,7 +212,7 @@ func (fileshare *FileShare) ClassOfService() (*ClassOfService, error) {
 	if fileshare.classOfService == "" {
 		return result, nil
 	}
-	return GetClassOfService(fileshare.GetClient(), fileshare.classOfService)
+	return GetClassOfService(fileshare.Client, fileshare.classOfService)
 }
 
 // FileSystem gets the file share's associated file system.
@@ -187,10 +221,10 @@ func (fileshare *FileShare) FileSystem() (*FileSystem, error) {
 	if fileshare.fileSystem == "" {
 		return result, nil
 	}
-	return GetFileSystem(fileshare.GetClient(), fileshare.fileSystem)
+	return GetFileSystem(fileshare.Client, fileshare.fileSystem)
 }
 
 // EthernetInterfaces gets the EthernetInterfaces associated with this share.
 func (fileshare *FileShare) EthernetInterfaces() ([]*redfish.EthernetInterface, error) {
-	return redfish.ListReferencedEthernetInterfaces(fileshare.GetClient(), fileshare.ethernetInterfaces)
+	return redfish.ListReferencedEthernetInterfaces(fileshare.Client, fileshare.ethernetInterfaces)
 }

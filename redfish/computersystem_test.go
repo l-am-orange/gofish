@@ -59,27 +59,7 @@ var computerSystemBody = `{
 				"SDCard",
 				"UefiHttp"
 			],
-			"BootOptions": {
-				"@odata.id": "/redfish/v1/Systems/1/BootOptions"
-			  },
-			"BootNext": "",
-			"BootOrder": [
-				"Boot0003",
-				"Boot0011",
-				"Boot0014",
-				"Boot0007",
-				"Boot0008",
-				"Boot0009",
-				"Boot000A",
-				"Boot000B",
-				"Boot000C",
-				"Boot000D",
-				"Boot000E",
-				"Boot000F",
-				"Boot0002"
-				],
-			"UefiTargetBootSourceOverride": "uefi device path",
-			"HttpBootUri": "http://localhost/boot.efi"
+			"UefiTargetBootSourceOverride": "uefi device path"
 		},
 		"BiosVersion": "P79 v1.00 (09/20/2013)",
 		"ProcessorSummary": {
@@ -88,10 +68,7 @@ var computerSystemBody = `{
 				"State": "Enabled"
 			},
 			"Count": 2,
-			"Model": "Multi-Core Intel(R) Xeon(R) processor 7500 Series",
-			"Metrics": {
-				"@odata.id": "/redfish/v1/Systems/System-1/ProcessorSummary/ProcessorMetrics"
-			}
+			"Model": "Multi-Core Intel(R) Xeon(R) processor 7500 Series"
 		},
 		"MemorySummary": {
 			"Status": {
@@ -124,24 +101,6 @@ var computerSystemBody = `{
 		},
 		"SimpleStorage": {
 			"@odata.id": "/redfish/v1/Systems/System-1/SimpleStorage"
-		},
-		"Storage": {
-			"@odata.id": "/redfish/v1/Systems/1/Storage"
-		},
-    	"OperatingSystem": {
-        	"@odata.id": "/redfish/v1/Systems/1/OperatingSystem"
-    	},
-		"LogServices": {
-			"@odata.id": "/redfish/v1/Systems/1/LogServices"
-		},
-		"SecureBoot": {
-			"@odata.id": "/redfish/v1/Systems/1/SecureBoot"
-		},
-		"Bios": {
-			"@odata.id": "/redfish/v1/Systems/1/Bios"
-		},
-		"USBControllers": {
-		  "@odata.id": "/redfish/v1/Systems/System_0/USBControllers"
 		},
 		"Links": {
 			"Chassis": [
@@ -239,10 +198,6 @@ func TestComputerSystem(t *testing.T) { //nolint
 		t.Errorf("Received invalid uefi target boot source: %s", result.Boot.UefiTargetBootSourceOverride)
 	}
 
-	if result.Boot.HTTPBootURI != "http://localhost/boot.efi" {
-		t.Errorf("Received invalid http boot uri: %s", result.Boot.HTTPBootURI)
-	}
-
 	if result.ProcessorSummary.Status.State != common.EnabledState {
 		t.Errorf("Received invalid processor summary state: %s", result.ProcessorSummary.Status.State)
 	}
@@ -278,11 +233,6 @@ func TestComputerSystem(t *testing.T) { //nolint
 			result.TrustedModules[0].InterfaceTypeSelection)
 	}
 
-	if result.ProcessorSummary.metrics != "/redfish/v1/Systems/System-1/ProcessorSummary/ProcessorMetrics" {
-		t.Errorf("Received invalid processor summary metrics: %s",
-			result.ProcessorSummary.metrics)
-	}
-
 	if result.processors != "/redfish/v1/Systems/System-1/Processors" {
 		t.Errorf("Received invalid processors reference: %s", result.processors)
 	}
@@ -315,15 +265,11 @@ func TestComputerSystem(t *testing.T) { //nolint
 		t.Errorf("Invalid allowable reset actions, expected 6, got %d",
 			len(result.SupportedResetTypes))
 	}
-	if len(result.managedBy) != 1 {
-		t.Errorf("Received invalid number of ManagedBy: %d", len(result.managedBy))
+	if len(result.ManagedBy) != 1 {
+		t.Errorf("Received invalid number of ManagedBy: %d", len(result.ManagedBy))
 	}
-	if result.managedBy[0] != "/redfish/v1/Managers/BMC-1" {
-		t.Errorf("Received invalid Managers reference: %s", result.managedBy[0])
-	}
-
-	if result.operatingSystem != "/redfish/v1/Systems/1/OperatingSystem" {
-		t.Errorf("Received invalid OperatingSystem reference: %s", result.operatingSystem)
+	if result.ManagedBy[0] != "/redfish/v1/Managers/BMC-1" {
+		t.Errorf("Received invalid Managers reference: %s", result.ManagedBy[0])
 	}
 }
 

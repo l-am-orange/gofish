@@ -27,6 +27,7 @@ const (
 type LineInputVoltageType string
 
 const (
+
 	// UnknownLineInputVoltageType The power supply line input voltage type
 	// cannot be determined.
 	UnknownLineInputVoltageType LineInputVoltageType = "Unknown"
@@ -58,6 +59,7 @@ const (
 type PowerLimitException string
 
 const (
+
 	// NoActionPowerLimitException Take no action when the limit is exceeded.
 	NoActionPowerLimitException PowerLimitException = "NoAction"
 	// HardPowerOffPowerLimitException Turn the power off immediately when
@@ -74,6 +76,7 @@ const (
 type PowerSupplyType string
 
 const (
+
 	// UnknownPowerSupplyType The power supply type cannot be determined.
 	UnknownPowerSupplyType PowerSupplyType = "Unknown"
 	// ACPowerSupplyType Alternating Current (AC) power supply.
@@ -110,111 +113,96 @@ type InputRange struct {
 // implementation.
 type Power struct {
 	common.Entity
+
 	// ODataContext is the odata context.
 	ODataContext string `json:"@odata.context"`
-	// ODataEtag is the odata etag.
-	ODataEtag string `json:"@odata.etag"`
 	// ODataType is the odata type.
 	ODataType string `json:"@odata.type"`
 	// Description provides a description of this resource.
 	Description string
-	// Oem shall contain the OEM extensions. All values for properties that this object contains shall conform to the
-	// Redfish Specification-described requirements.
-	OEM json.RawMessage `json:"Oem"`
-	// PowerControl shall contain the set of power control readings and settings.
+	// IndicatorLED shall contain the indicator light state for the indicator
+	// light associated with this power supply.
+	IndicatorLED common.IndicatorLED
+	// PowerControl shall be the definition for power control (power reading and
+	// limiting) for a Redfish implementation.
 	PowerControl []PowerControl
-	// PowerControl@odata.count
+	// PowerControlCount is the number of objects.
 	PowerControlCount int `json:"PowerControl@odata.count"`
-	// PowerSupplies shall contain the set of power supplies associated with this system or device.
+	// PowerSupplies shall contain details of the power supplies associated with
+	// this system or device.
 	PowerSupplies []PowerSupply
-	// PowerSupplies@odata.count
+	// PowerSuppliesCount is the number of objects.
 	PowerSuppliesCount int `json:"PowerSupplies@odata.count"`
-	// Redundancy shall contain redundancy information for the set of power supplies in this system or device.
+	// Redundancy shall contain redundancy information for the power subsystem
+	// of this system or device.
 	Redundancy []Redundancy
-	// Redundancy@odata.count
+	// RedundancyCount is the number of objects.
 	RedundancyCount int `json:"Redundancy@odata.count"`
-	// Voltages shall contain the set of voltage sensors for this chassis.
+	// Voltages shall be the definition for voltage
+	// sensors for a Redfish implementation.
 	Voltages []Voltage
-	// Voltages@odata.count
+	// VoltagesCount is the number of objects.
 	VoltagesCount int `json:"Voltages@odata.count"`
-
-	powerSupplyResetTarget string
-}
-
-// UnmarshalJSON unmarshals a Power object from the raw JSON.
-func (power *Power) UnmarshalJSON(b []byte) error {
-	type temp Power
-	type Actions struct {
-		PowerSupplyReset common.ActionTarget `json:"#Power.PowerSupplyReset"`
-	}
-	var t struct {
-		temp
-		Actions Actions
-	}
-
-	err := json.Unmarshal(b, &t)
-	if err != nil {
-		return err
-	}
-
-	*power = Power(t.temp)
-
-	// Extract the links to other entities for later
-	power.powerSupplyResetTarget = t.Actions.PowerSupplyReset.Target
-
-	return nil
-}
-
-// PowerSupplyReset resets the targeted power supply specified by the MemberID from the PowerSupplies array.
-// A `GracefulRestart` ResetType shall reset the power supply but shall not affect the power output.
-// A `ForceRestart` ResetType can affect the power supply output.
-func (power *Power) PowerSupplyReset(memberID string, resetType ResetType) error {
-	t := struct {
-		MemberID  string
-		ResetType ResetType
-	}{
-		MemberID:  memberID,
-		ResetType: resetType,
-	}
-	return power.Post(power.powerSupplyResetTarget, t)
-}
-
-// RedundancySet returns the []PowerSupply in the target redundancy group based on the
-// memberID. The memberID is the ID for the redundancy group from the list of .Redundancy
-// from /redfish/v1/Chassis/{id}/Power
-func (power *Power) RedundancySet(memberID int) []PowerSupply {
-	var powerSupplies []PowerSupply
-	if len(power.Redundancy) >= memberID+1 {
-		for _, psLink := range power.Redundancy[memberID].redundancySet {
-			for i := range power.PowerSupplies {
-				if power.PowerSupplies[i].ODataID == psLink {
-					powerSupplies = append(powerSupplies, power.PowerSupplies[i])
-				}
-			}
-		}
-	}
-
-	return powerSupplies
 }
 
 // GetPower will get a Power instance from the service.
 func GetPower(c common.Client, uri string) (*Power, error) {
-	return common.GetObject[Power](c, uri)
+	var power Power
+	return &power, power.Get(c, uri, &power)
 }
 
 // ListReferencedPowers gets the collection of Power from
 // a provided reference.
-func ListReferencedPowers(c common.Client, link string) ([]*Power, error) {
-	return common.GetCollectionObjects[Power](c, link)
+func ListReferencedPowers(c common.Client, link string) ([]*Power, error) { //nolint:dupl
+	var result []*Power
+	if link == "" {
+		return result, nil
+	}
+
+	type GetResult struct {
+		Item  *Power
+		Link  string
+		Error error
+	}
+
+	ch := make(chan GetResult)
+	collectionError := common.NewCollectionError()
+	get := func(link string) {
+		power, err := GetPower(c, link)
+		ch <- GetResult{Item: power, Link: link, Error: err}
+	}
+
+	go func() {
+		err := common.CollectList(get, c, link)
+		if err != nil {
+			collectionError.Failures[link] = err
+		}
+		close(ch)
+	}()
+
+	for r := range ch {
+		if r.Error != nil {
+			collectionError.Failures[r.Link] = r.Error
+		} else {
+			result = append(result, r.Item)
+		}
+	}
+
+	if collectionError.Empty() {
+		return result, nil
+	}
+
+	return result, collectionError
 }
 
+// PowerControl is
 type PowerControl struct {
 	common.Entity
 
 	// MemberID shall uniquely identify the member within the collection. For
 	// services supporting Redfish v1.6 or higher, this value shall be the
 	// zero-based array index.
-	MemberID string
+	MemberID string `json:"MemberId"`
 	// PhysicalContext shall be a description of the affected device(s) or region
 	// within the chassis to which this power control applies.
 	PhysicalContext common.PhysicalContext
@@ -247,15 +235,13 @@ type PowerControl struct {
 }
 
 // UnmarshalJSON unmarshals a PowerControl object from the raw JSON.
-func (powercontrol *PowerControl) UnmarshalJSON(b []byte) error {
+func (powercontrol *PowerControl) UnmarshalJSON(b []byte) error { //nolint:dupl
 	type temp PowerControl
 	type t1 struct {
 		temp
 	}
 	var t t1
 
-	// Some vendor implementations had a bug where the member ID was an numeric value.
-	// To avoid a marshaling error for these systems we try to handle both ways.
 	err := json.Unmarshal(b, &t)
 	if err != nil {
 		// See if we need to handle converting MemberID
@@ -322,7 +308,8 @@ type PowerMetric struct {
 	MinConsumedWatts float32
 }
 
-// PowerSupply is the power supplies associated with this system or device.
+// PowerSupply is Details of a power supplies associated with this system
+// or device.
 type PowerSupply struct {
 	common.Entity
 
@@ -334,11 +321,14 @@ type PowerSupply struct {
 	// FirmwareVersion shall contain the firmware version as
 	// defined by the manufacturer for the associated power supply.
 	FirmwareVersion string
-	// HotPluggable shall indicate whether the device can be inserted or removed while the underlying equipment
-	// otherwise remains in its current operational state. Devices indicated as hot-pluggable shall allow the device to
-	// become operable without altering the operational state of the underlying equipment. Devices that cannot be
-	// inserted or removed from equipment in operation, or devices that cannot become operable without affecting the
-	// operational state of that equipment, shall be indicated as not hot-pluggable.
+	// HotPluggable shall indicate whether the
+	// device can be inserted or removed while the underlying equipment
+	// otherwise remains in its current operational state. Devices indicated
+	// as hot-pluggable shall allow the device to become operable without
+	// altering the operational state of the underlying equipment. Devices
+	// that cannot be inserted or removed from equipment in operation, or
+	// devices that cannot become operable without affecting the operational
+	// state of that equipment, shall be indicated as not hot-pluggable.
 	HotPluggable bool
 	// IndicatorLED shall contain the indicator
 	// light state for the indicator light associated with this power supply.
@@ -367,8 +357,6 @@ type PowerSupply struct {
 	// member within the collection. For services supporting Redfish v1.6 or
 	// higher, this value shall be the zero-based array index.
 	MemberID string `json:"MemberId"`
-	// The link to the power supply metrics resource associated with this power supply.
-	metrics string
 	// Model shall contain the model information as defined
 	// by the manufacturer for the associated power supply.
 	Model string
@@ -391,7 +379,7 @@ type PowerSupply struct {
 	// Redundancy is used to show redundancy for power supplies and other
 	// elements in this resource. The use of IDs within these arrays shall
 	// reference the members of the redundancy groups.
-	redundancy []string
+	Redundancy []Redundancy
 	// RedundancyCount is the number of objects.
 	RedundancyCount int `json:"Redundancy@odata.count"`
 	// SerialNumber shall contain the serial number as
@@ -413,9 +401,7 @@ func (powersupply *PowerSupply) UnmarshalJSON(b []byte) error {
 	type temp PowerSupply
 	var t struct {
 		temp
-		Assembly   common.Link
-		Metrics    common.Link
-		Redundancy common.Links
+		Assembly common.Link
 	}
 
 	err := json.Unmarshal(b, &t)
@@ -426,44 +412,11 @@ func (powersupply *PowerSupply) UnmarshalJSON(b []byte) error {
 	// Extract the links to other entities for later
 	*powersupply = PowerSupply(t.temp)
 	powersupply.assembly = t.Assembly.String()
-	powersupply.metrics = t.Metrics.String()
-	powersupply.redundancy = t.Redundancy.ToStrings()
 
 	// This is a read/write object, so we need to save the raw object data for later
 	powersupply.rawData = b
 
 	return nil
-}
-
-// Assembly gets the containing assembly.
-func (powersupply *PowerSupply) Assembly() (*Assembly, error) {
-	if powersupply.assembly == "" {
-		return nil, nil
-	}
-	return GetAssembly(powersupply.GetClient(), powersupply.assembly)
-}
-
-// Metrics gets the metrics associated with this power supply.
-func (powersupply *PowerSupply) Metrics() (*PowerSupplyUnitMetrics, error) {
-	if powersupply.metrics == "" {
-		return nil, nil
-	}
-	return GetPowerSupplyUnitMetrics(powersupply.GetClient(), powersupply.metrics)
-}
-
-// Redundancy gets the endpoints at the other end of the link.
-func (powersupply *PowerSupply) Redundancy() ([]*Redundancy, error) {
-	return common.GetObjects[Redundancy](powersupply.GetClient(), powersupply.redundancy)
-}
-
-// GetPowerSupply will get a PowerSupply instance from the Redfish service.
-func GetPowerSupply(c common.Client, uri string) (*PowerSupply, error) {
-	var powerSupply PowerSupply
-	return &powerSupply, powerSupply.Get(c, uri, &powerSupply)
-}
-
-func ListReferencedPowerSupplies(c common.Client, link string) ([]*PowerSupply, error) {
-	return common.GetCollectionObjects[PowerSupply](c, link)
 }
 
 // Update commits updates to this object's properties to the running system.
@@ -509,17 +462,14 @@ type Voltage struct {
 	// MemberID shall uniquely identify the member within the collection. For
 	// services supporting Redfish v1.6 or higher, this value shall be the
 	// zero-based array index.
-	MemberID string
+	MemberID string `json:"MemberId"`
 	// MinReadingRange shall indicate the lowest possible value for ReadingVolts.
 	// Units shall use the same units as the related ReadingVolts property.
 	MinReadingRange float32
-	// OEM shall contain the OEM extensions. All values for properties that this object contains shall conform to the
-	// Redfish Specification-described requirements.
-	OEM json.RawMessage
 	// PhysicalContext shall be a description
 	// of the affected device or region within the chassis to which this
 	// voltage measurement applies.
-	PhysicalContext PhysicalContext
+	PhysicalContext string
 	// ReadingVolts shall be the present
 	// reading of the voltage sensor's reading.
 	ReadingVolts float32
@@ -545,7 +495,7 @@ type Voltage struct {
 }
 
 // UnmarshalJSON unmarshals a Voltage object from the raw JSON.
-func (voltage *Voltage) UnmarshalJSON(b []byte) error {
+func (voltage *Voltage) UnmarshalJSON(b []byte) error { //nolint:dupl
 	type temp Voltage
 	type t1 struct {
 		temp

@@ -67,6 +67,7 @@ func ({{ class.name|lower }} *{{ class.name }}) UnmarshalJSON(b []byte) error {
 {%- if class.isEntity and class.rwAttrs|length > 0 %}
 // Update commits updates to this object's properties to the running system.
 func ({{ class.name|lower }} *{{ class.name }}) Update() error {
+
 	// Get a representation of the object's original state so we can find what
 	// to update.
 	original := new({{ class.name }})
@@ -88,13 +89,64 @@ func ({{ class.name|lower }} *{{ class.name }}) Update() error {
 {% if class.name == object_name %}
 // Get{{ class.name }} will get a {{ class.name }} instance from the service.
 func Get{{ class.name }}(c common.Client, uri string) (*{{ class.name }}, error) {
-	common.GetObject[{{ class.name }}](c, uri)
+    resp, err := c.Get(uri)
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
+
+    var {{ class.name|lower }} {{ class.name }}
+    err = json.NewDecoder(resp.Body).Decode(&{{ class.name|lower }})
+    if err != nil {
+        return nil, err
+    }
+
+    {{ class.name|lower }}.SetClient(c)
+    return &{{ class.name|lower }}, nil
 }
 
 // ListReferenced{{ class.name }}s gets the collection of {{ class.name }} from
 // a provided reference.
 func ListReferenced{{ class.name }}s(c common.Client, link string) ([]*{{ class.name }}, error) {
-	return common.GetCollectionObjects[{{ class.name }}](c, link)
+    var result []*{{ class.name }}
+	if link == "" {
+		return result, nil
+	}
+
+	type GetResult struct {
+		Item  *{{ class.name }}
+		Link  string
+		Error error
+	}
+
+	ch := make(chan GetResult)
+	collectionError := common.NewCollectionError()
+	get := func(link string) {
+		{{ class.name|lower }}, err := Get{{ class.name }}(c, link)
+		ch <- GetResult{Item: {{ class.name|lower }}, Link: link, Error: err}
+	}
+
+	go func() {
+		err := common.CollectList(get, c, link)
+		if err != nil {
+			collectionError.Failures[link] = err
+		}
+		close(ch)
+	}()
+
+	for r := range ch {
+		if r.Error != nil {
+			collectionError.Failures[r.Link] = r.Error
+		} else {
+			result = append(result, r.Item)
+		}
+	}
+
+	if collectionError.Empty() {
+		return result, nil
+	}
+
+	return result, collectionError
 }
 
 {% endif %}

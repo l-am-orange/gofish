@@ -27,9 +27,6 @@ var serviceRootBody = strings.NewReader(
 		"Chassis": {
 			"@odata.id": "/redfish/v1/Chassis"
 		},
-		"ComponentIntegrity": {
-			"@odata.id": "/redfish/v1/ComponentIntegrity"
-		},
 		"CompositionService": {
 			"@odata.id": "/redfish/v1/Compositions"
 		},

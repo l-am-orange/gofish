@@ -23,11 +23,6 @@ var softwareInventoryBody = `{
 	  "Health": "OK",
 	  "State": "Enabled"
 	},
-	"RelatedItem": [
-		{
-		"@odata.id": "/redfish/v1/Managers/1"
-		}
-	],
 	"Version": "1.2.3.4",
 	"LowestSupportedVersion": "1.1.1.1",
 	"Manufacturer": "BobCo",
@@ -63,10 +58,6 @@ func TestSoftwareInventory(t *testing.T) {
 
 	if result.Manufacturer != "BobCo" {
 		t.Errorf("Manufacturer is wrong")
-	}
-
-	if len(result.relatedItem) != 1 || result.relatedItem[0] != "/redfish/v1/Managers/1" {
-		t.Errorf("Unexpected related items: %#v", result.relatedItem)
 	}
 
 	if result.ReleaseDate != "1/1/2020" {

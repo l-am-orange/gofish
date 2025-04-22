@@ -118,13 +118,52 @@ func (capacitysource *CapacitySource) UnmarshalJSON(b []byte) error {
 
 // GetCapacitySource will get a CapacitySource instance from the service.
 func GetCapacitySource(c common.Client, uri string) (*CapacitySource, error) {
-	return common.GetObject[CapacitySource](c, uri)
+	var capacitySource CapacitySource
+	return &capacitySource, capacitySource.Get(c, uri, &capacitySource)
 }
 
 // ListReferencedCapacitySources gets the collection of CapacitySources from
 // a provided reference.
-func ListReferencedCapacitySources(c common.Client, link string) ([]*CapacitySource, error) {
-	return common.GetCollectionObjects[CapacitySource](c, link)
+func ListReferencedCapacitySources(c common.Client, link string) ([]*CapacitySource, error) { //nolint:dupl
+	var result []*CapacitySource
+	if link == "" {
+		return result, nil
+	}
+
+	type GetResult struct {
+		Item  *CapacitySource
+		Link  string
+		Error error
+	}
+
+	ch := make(chan GetResult)
+	collectionError := common.NewCollectionError()
+	get := func(link string) {
+		capacitysource, err := GetCapacitySource(c, link)
+		ch <- GetResult{Item: capacitysource, Link: link, Error: err}
+	}
+
+	go func() {
+		err := common.CollectList(get, c, link)
+		if err != nil {
+			collectionError.Failures[link] = err
+		}
+		close(ch)
+	}()
+
+	for r := range ch {
+		if r.Error != nil {
+			collectionError.Failures[r.Link] = r.Error
+		} else {
+			result = append(result, r.Item)
+		}
+	}
+
+	if collectionError.Empty() {
+		return result, nil
+	}
+
+	return result, collectionError
 }
 
 // ProvidedClassOfService gets the ClassOfService from the ProvidingDrives,
@@ -133,27 +172,27 @@ func (capacitysource *CapacitySource) ProvidedClassOfService() (*ClassOfService,
 	if capacitysource.providedClassOfService == "" {
 		return nil, nil
 	}
-	return GetClassOfService(capacitysource.GetClient(), capacitysource.providedClassOfService)
+	return GetClassOfService(capacitysource.Client, capacitysource.providedClassOfService)
 }
 
 // ProvidingDrives gets contributing drives.
 func (capacitysource *CapacitySource) ProvidingDrives() ([]*redfish.Drive, error) {
-	return redfish.ListReferencedDrives(capacitysource.GetClient(), capacitysource.providingDrives)
+	return redfish.ListReferencedDrives(capacitysource.Client, capacitysource.providingDrives)
 }
 
 // ProvidingMemory gets contributing memory.
 func (capacitysource *CapacitySource) ProvidingMemory() ([]*redfish.Memory, error) {
-	return redfish.ListReferencedMemorys(capacitysource.GetClient(), capacitysource.providingMemory)
+	return redfish.ListReferencedMemorys(capacitysource.Client, capacitysource.providingMemory)
 }
 
 // TODO: Add memory chunks
 
 // ProvidingPools gets contributing pools.
 func (capacitysource *CapacitySource) ProvidingPools() ([]*StoragePool, error) {
-	return ListReferencedStoragePools(capacitysource.GetClient(), capacitysource.providingPools)
+	return ListReferencedStoragePools(capacitysource.Client, capacitysource.providingPools)
 }
 
 // ProvidingVolumes gets contributing volumes.
 func (capacitysource *CapacitySource) ProvidingVolumes() ([]*Volume, error) {
-	return ListReferencedVolumes(capacitysource.GetClient(), capacitysource.providingVolumes)
+	return ListReferencedVolumes(capacitysource.Client, capacitysource.providingVolumes)
 }

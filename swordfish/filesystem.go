@@ -150,7 +150,6 @@ type FileSystem struct {
 	// MaxFileNameLengthBytes shall specify the maximum length of a file name
 	// within the file system.
 	MaxFileNameLengthBytes int64
-	metrics                string
 	// RecoverableCapacitySourceCount is the number of available capacity source
 	// resources currently available in the event that an equivalent capacity
 	// source resource fails.
@@ -206,7 +205,6 @@ func (filesystem *FileSystem) UnmarshalJSON(b []byte) error {
 		ExportedShares common.Link
 		ReplicaTargets common.Links
 		Links          links
-		Metrics        common.Link
 	}
 
 	err := json.Unmarshal(b, &t)
@@ -230,15 +228,6 @@ func (filesystem *FileSystem) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// Metrics gets the filesystem metrics.
-func (filesystem *FileSystem) Metrics() (*FileSystemMetrics, error) {
-	if filesystem.metrics == "" {
-		return nil, nil
-	}
-
-	return GetFileSystemMetrics(filesystem.GetClient(), filesystem.metrics)
-}
-
 // Update commits updates to this object's properties to the running system.
 func (filesystem *FileSystem) Update() error {
 	// Get a representation of the object's original state so we can find what
@@ -260,7 +249,6 @@ func (filesystem *FileSystem) Update() error {
 		"LowSpaceWarningThresholdPercents",
 		"MaxFileNameLengthBytes",
 		"RecoverableCapacitySourceCount",
-		"ReplicationEnabled",
 	}
 
 	originalElement := reflect.ValueOf(original).Elem()
@@ -271,18 +259,57 @@ func (filesystem *FileSystem) Update() error {
 
 // GetFileSystem will get a FileSystem instance from the service.
 func GetFileSystem(c common.Client, uri string) (*FileSystem, error) {
-	return common.GetObject[FileSystem](c, uri)
+	var fileSystem FileSystem
+	return &fileSystem, fileSystem.Get(c, uri, &fileSystem)
 }
 
 // ListReferencedFileSystems gets the collection of FileSystem from
 // a provided reference.
-func ListReferencedFileSystems(c common.Client, link string) ([]*FileSystem, error) {
-	return common.GetCollectionObjects[FileSystem](c, link)
+func ListReferencedFileSystems(c common.Client, link string) ([]*FileSystem, error) { //nolint:dupl
+	var result []*FileSystem
+	if link == "" {
+		return result, nil
+	}
+
+	type GetResult struct {
+		Item  *FileSystem
+		Link  string
+		Error error
+	}
+
+	ch := make(chan GetResult)
+	collectionError := common.NewCollectionError()
+	get := func(link string) {
+		filesystem, err := GetFileSystem(c, link)
+		ch <- GetResult{Item: filesystem, Link: link, Error: err}
+	}
+
+	go func() {
+		err := common.CollectList(get, c, link)
+		if err != nil {
+			collectionError.Failures[link] = err
+		}
+		close(ch)
+	}()
+
+	for r := range ch {
+		if r.Error != nil {
+			collectionError.Failures[r.Link] = r.Error
+		} else {
+			result = append(result, r.Item)
+		}
+	}
+
+	if collectionError.Empty() {
+		return result, nil
+	}
+
+	return result, collectionError
 }
 
 // ExportedShares gets the exported file shares for this file system.
 func (filesystem *FileSystem) ExportedShares() ([]*FileShare, error) {
-	return ListReferencedFileShares(filesystem.GetClient(), filesystem.exportedShares)
+	return ListReferencedFileShares(filesystem.Client, filesystem.exportedShares)
 }
 
 // ClassOfService gets the filesystem's class of service.
@@ -291,10 +318,26 @@ func (filesystem *FileSystem) ClassOfService() (*ClassOfService, error) {
 	if filesystem.classOfService == "" {
 		return result, nil
 	}
-	return GetClassOfService(filesystem.GetClient(), filesystem.classOfService)
+	return GetClassOfService(filesystem.Client, filesystem.classOfService)
 }
 
 // SpareResourceSets gets the spare resource sets used for this filesystem.
 func (filesystem *FileSystem) SpareResourceSets() ([]*SpareResourceSet, error) {
-	return common.GetObjects[SpareResourceSet](filesystem.GetClient(), filesystem.spareResourceSets)
+	var result []*SpareResourceSet
+
+	collectionError := common.NewCollectionError()
+	for _, rsLink := range filesystem.spareResourceSets {
+		rs, err := GetSpareResourceSet(filesystem.Client, rsLink)
+		if err != nil {
+			collectionError.Failures[rsLink] = err
+		} else {
+			result = append(result, rs)
+		}
+	}
+
+	if collectionError.Empty() {
+		return result, nil
+	}
+
+	return result, collectionError
 }

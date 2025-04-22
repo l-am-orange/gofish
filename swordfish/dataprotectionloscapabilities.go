@@ -177,25 +177,92 @@ func (dataprotectionloscapabilities *DataProtectionLoSCapabilities) Update() err
 
 // GetDataProtectionLoSCapabilities will get a DataProtectionLoSCapabilities instance from the service.
 func GetDataProtectionLoSCapabilities(c common.Client, uri string) (*DataProtectionLoSCapabilities, error) {
-	return common.GetObject[DataProtectionLoSCapabilities](c, uri)
+	var dataProtectionLoSCapabilities DataProtectionLoSCapabilities
+	return &dataProtectionLoSCapabilities, dataProtectionLoSCapabilities.Get(c, uri, &dataProtectionLoSCapabilities)
 }
 
 // ListReferencedDataProtectionLoSCapabilities gets the collection of DataProtectionLoSCapabilities from
 // a provided reference.
-func ListReferencedDataProtectionLoSCapabilities(c common.Client, link string) ([]*DataProtectionLoSCapabilities, error) {
-	return common.GetCollectionObjects[DataProtectionLoSCapabilities](c, link)
+func ListReferencedDataProtectionLoSCapabilities(c common.Client, link string) ([]*DataProtectionLoSCapabilities, error) { //nolint:dupl
+	var result []*DataProtectionLoSCapabilities
+	if link == "" {
+		return result, nil
+	}
+
+	type GetResult struct {
+		Item  *DataProtectionLoSCapabilities
+		Link  string
+		Error error
+	}
+
+	ch := make(chan GetResult)
+	collectionError := common.NewCollectionError()
+	get := func(link string) {
+		dataprotectionloscapabilities, err := GetDataProtectionLoSCapabilities(c, link)
+		ch <- GetResult{Item: dataprotectionloscapabilities, Link: link, Error: err}
+	}
+
+	go func() {
+		err := common.CollectList(get, c, link)
+		if err != nil {
+			collectionError.Failures[link] = err
+		}
+		close(ch)
+	}()
+
+	for r := range ch {
+		if r.Error != nil {
+			collectionError.Failures[r.Link] = r.Error
+		} else {
+			result = append(result, r.Item)
+		}
+	}
+
+	if collectionError.Empty() {
+		return result, nil
+	}
+
+	return result, collectionError
 }
 
 // SupportedReplicaOptions gets the support replica ClassesOfService.
 func (dataprotectionloscapabilities *DataProtectionLoSCapabilities) SupportedReplicaOptions() ([]*ClassOfService, error) {
-	return common.GetObjects[ClassOfService](
-		dataprotectionloscapabilities.GetClient(),
-		dataprotectionloscapabilities.supportedReplicaOptions)
+	var result []*ClassOfService
+
+	collectionError := common.NewCollectionError()
+	for _, link := range dataprotectionloscapabilities.supportedReplicaOptions {
+		classOfService, err := GetClassOfService(dataprotectionloscapabilities.Client, link)
+		if err != nil {
+			collectionError.Failures[link] = err
+		} else {
+			result = append(result, classOfService)
+		}
+	}
+
+	if collectionError.Empty() {
+		return result, nil
+	}
+
+	return result, collectionError
 }
 
 // SupportedLinesOfService gets the supported lines of service.
 func (dataprotectionloscapabilities *DataProtectionLoSCapabilities) SupportedLinesOfService() ([]*DataProtectionLineOfService, error) {
-	return common.GetObjects[DataProtectionLineOfService](
-		dataprotectionloscapabilities.GetClient(),
-		dataprotectionloscapabilities.supportedLinesOfService)
+	var result []*DataProtectionLineOfService
+
+	collectionError := common.NewCollectionError()
+	for _, link := range dataprotectionloscapabilities.supportedLinesOfService {
+		lineOfService, err := GetDataProtectionLineOfService(dataprotectionloscapabilities.Client, link)
+		if err != nil {
+			collectionError.Failures[link] = err
+		} else {
+			result = append(result, lineOfService)
+		}
+	}
+
+	if collectionError.Empty() {
+		return result, nil
+	}
+
+	return result, collectionError
 }

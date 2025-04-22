@@ -21,49 +21,12 @@ var ethernetInterfaceBody = `{
 		"FQDN": "default.local",
 		"FullDuplex": true,
 		"HostName": "default",
-		"MaxIPv6StaticAddresses": 1,
 		"IPv4Addresses": [
 			{
 				"Address": "172.16.3.39",
 				"AddressOrigin": "IPv4LinkLocal",
 				"Gateway": "0.0.0.0",
 				"SubnetMask": "255.255.0.0"
-			}
-		],
-		"IPv6AddressPolicyTable": [
-			{
-				"Prefix": "::1/128",
-				"Precedence": 50,
-				"Label": 0
-			}
-		],
-		"IPv4StaticAddresses": [
-			{
-				"Address": "169.254.3.254",
-				"SubnetMask": "255.255.255.0",
-				"Gateway": "169.254.3.254"
-			}
-		],
-		"IPv6StaticAddresses": [
-			{
-				"Address": "",
-				"PrefixLength": 0
-			},
-			{
-				"Address": "::",
-				"PrefixLength": 64
-			},
-			{
-				"Address": "::",
-				"PrefixLength": 64
-			},
-			{
-				"Address": "::",
-				"PrefixLength": 64
-			},
-			{
-				"Address": "::",
-				"PrefixLength": 64
 			}
 		],
 		"Id": "NIC-0",
@@ -136,15 +99,9 @@ func TestEthernetInterface(t *testing.T) {
 	if result.SpeedMbps != 10000 {
 		t.Errorf("Expected 10000 speed, got %d", result.SpeedMbps)
 	}
-
-	if result.VLAN.VLANID != 0 {
-		t.Errorf("Expected VLAN ID 0, got %d", result.VLAN.VLANID)
-	}
 }
 
 // TestEthernetInterfaceUpdate tests the Update call.
-//
-//nolint:funlen
 func TestEthernetInterfaceUpdate(t *testing.T) {
 	var result EthernetInterface
 	err := json.NewDecoder(strings.NewReader(ethernetInterfaceBody)).Decode(&result)
@@ -164,13 +121,6 @@ func TestEthernetInterfaceUpdate(t *testing.T) {
 	result.MACAddress = "de:ad:de:ad:de:ad"
 	result.MTUSize = 9216
 	result.SpeedMbps = 1000
-
-	result.DHCPv4.DHCPEnabled = true
-	result.DHCPv6.UseDNSServers = true
-	result.IPv6AddressPolicyTable = append(result.IPv6AddressPolicyTable, IPv6AddressPolicyEntry{Label: 5})
-	result.StatelessAddressAutoConfig.IPv6AutoConfigEnabled = true
-	result.VLAN.VLANID = 8
-
 	err = result.Update()
 
 	if err != nil {
@@ -213,26 +163,6 @@ func TestEthernetInterfaceUpdate(t *testing.T) {
 
 	if strings.Contains(calls[0].Payload, "FullDuplex") {
 		t.Errorf("Unexpected update for FullDuplex in payload: %s", calls[0].Payload)
-	}
-
-	if !strings.Contains(calls[0].Payload, "DHCPEnabled:true") {
-		t.Errorf("Unexpected DHCPv4.DHCPEnabled update payload: %s", calls[0].Payload)
-	}
-
-	if !strings.Contains(calls[0].Payload, "UseDNSServers:true") {
-		t.Errorf("Unexpected DHCPv6.UseDNSServers update payload: %s", calls[0].Payload)
-	}
-
-	if !strings.Contains(calls[0].Payload, "Label:5") {
-		t.Errorf("Unexpected IPv6AddressPolicyTable Label update payload: %s", calls[0].Payload)
-	}
-
-	if !strings.Contains(calls[0].Payload, "IPv6AutoConfigEnabled:true") {
-		t.Errorf("Unexpected StatelessAddressAutoConfig IPv6AutoConfigEnabled update payload: %s", calls[0].Payload)
-	}
-
-	if !strings.Contains(calls[0].Payload, "VLANId:8") {
-		t.Errorf("Unexpected VLAN VLANID update payload: %s", calls[0].Payload)
 	}
 }
 
@@ -305,6 +235,6 @@ func TestEthernetInterfaceIPv6(t *testing.T) {
 	}
 
 	if result.IPv6Addresses[1].PrefixLength != 128 {
-		t.Errorf("The 3rd IPv6 address's prefix length should be 128, got: %d", result.IPv6Addresses[1].PrefixLength)
+		t.Errorf("The 3nd IPv6 address's prefix length should be 128, got: %d", result.IPv6Addresses[1].PrefixLength)
 	}
 }

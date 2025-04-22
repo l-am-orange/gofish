@@ -87,41 +87,160 @@ func (classofservice *ClassOfService) UnmarshalJSON(b []byte) error {
 
 // GetClassOfService will get a ClassOfService instance from the service.
 func GetClassOfService(c common.Client, uri string) (*ClassOfService, error) {
-	return common.GetObject[ClassOfService](c, uri)
+	var classOfService ClassOfService
+	return &classOfService, classOfService.Get(c, uri, &classOfService)
 }
 
 // ListReferencedClassOfServices gets the collection of ClassOfService from
 // a provided reference.
-func ListReferencedClassOfServices(c common.Client, link string) ([]*ClassOfService, error) {
-	return common.GetCollectionObjects[ClassOfService](c, link)
+func ListReferencedClassOfServices(c common.Client, link string) ([]*ClassOfService, error) { //nolint:dupl
+	var result []*ClassOfService
+	if link == "" {
+		return result, nil
+	}
+
+	type GetResult struct {
+		Item  *ClassOfService
+		Link  string
+		Error error
+	}
+
+	ch := make(chan GetResult)
+	collectionError := common.NewCollectionError()
+	get := func(link string) {
+		classofservice, err := GetClassOfService(c, link)
+		ch <- GetResult{Item: classofservice, Link: link, Error: err}
+	}
+
+	go func() {
+		err := common.CollectList(get, c, link)
+		if err != nil {
+			collectionError.Failures[link] = err
+		}
+		close(ch)
+	}()
+
+	for r := range ch {
+		if r.Error != nil {
+			collectionError.Failures[r.Link] = r.Error
+		} else {
+			result = append(result, r.Item)
+		}
+	}
+
+	if collectionError.Empty() {
+		return result, nil
+	}
+
+	return result, collectionError
 }
 
 // DataProtectionLinesOfServices gets the DataProtectionLinesOfService that are
 // part of this ClassOfService.
 func (classofservice *ClassOfService) DataProtectionLinesOfServices() ([]*DataProtectionLineOfService, error) {
-	return common.GetObjects[DataProtectionLineOfService](classofservice.GetClient(), classofservice.dataProtectionLinesOfService)
+	var result []*DataProtectionLineOfService
+
+	collectionError := common.NewCollectionError()
+	for _, dpLosLink := range classofservice.dataProtectionLinesOfService {
+		dpLos, err := GetDataProtectionLineOfService(classofservice.Client, dpLosLink)
+		if err != nil {
+			collectionError.Failures[dpLosLink] = err
+		} else {
+			result = append(result, dpLos)
+		}
+	}
+
+	if collectionError.Empty() {
+		return result, nil
+	}
+
+	return result, collectionError
 }
 
 // DataSecurityLinesOfServices gets the DataSecurityLinesOfService that are
 // part of this ClassOfService.
 func (classofservice *ClassOfService) DataSecurityLinesOfServices() ([]*DataSecurityLineOfService, error) {
-	return common.GetObjects[DataSecurityLineOfService](classofservice.GetClient(), classofservice.dataSecurityLinesOfService)
+	var result []*DataSecurityLineOfService
+
+	collectionError := common.NewCollectionError()
+	for _, dsLosLink := range classofservice.dataSecurityLinesOfService {
+		dsLos, err := GetDataSecurityLineOfService(classofservice.Client, dsLosLink)
+		if err != nil {
+			collectionError.Failures[dsLosLink] = err
+		} else {
+			result = append(result, dsLos)
+		}
+	}
+
+	if collectionError.Empty() {
+		return result, nil
+	}
+
+	return result, collectionError
 }
 
 // DataStorageLinesOfServices gets the DataStorageLinesOfService that are
 // part of this ClassOfService.
 func (classofservice *ClassOfService) DataStorageLinesOfServices() ([]*DataStorageLineOfService, error) {
-	return common.GetObjects[DataStorageLineOfService](classofservice.GetClient(), classofservice.dataStorageLinesOfService)
+	var result []*DataStorageLineOfService
+
+	collectionError := common.NewCollectionError()
+	for _, dsLosLink := range classofservice.dataStorageLinesOfService {
+		dsLos, err := GetDataStorageLineOfService(classofservice.Client, dsLosLink)
+		if err != nil {
+			collectionError.Failures[dsLosLink] = err
+		} else {
+			result = append(result, dsLos)
+		}
+	}
+
+	if collectionError.Empty() {
+		return result, nil
+	}
+
+	return result, collectionError
 }
 
 // IOConnectivityLinesOfServices gets the IOConnectivityLinesOfService that are
 // part of this ClassOfService.
 func (classofservice *ClassOfService) IOConnectivityLinesOfServices() ([]*IOConnectivityLineOfService, error) {
-	return common.GetObjects[IOConnectivityLineOfService](classofservice.GetClient(), classofservice.ioConnectivityLinesOfService)
+	var result []*IOConnectivityLineOfService
+
+	collectionError := common.NewCollectionError()
+	for _, ioLosLink := range classofservice.dataSecurityLinesOfService {
+		ioLos, err := GetIOConnectivityLineOfService(classofservice.Client, ioLosLink)
+		if err != nil {
+			collectionError.Failures[ioLosLink] = err
+		} else {
+			result = append(result, ioLos)
+		}
+	}
+
+	if collectionError.Empty() {
+		return result, nil
+	}
+
+	return result, collectionError
 }
 
 // IOPerformanceLinesOfServices gets the IOPerformanceLinesOfService that are
 // part of this ClassOfService.
 func (classofservice *ClassOfService) IOPerformanceLinesOfServices() ([]*IOPerformanceLineOfService, error) {
-	return common.GetObjects[IOPerformanceLineOfService](classofservice.GetClient(), classofservice.ioPerformanceLinesOfService)
+	var result []*IOPerformanceLineOfService
+
+	collectionError := common.NewCollectionError()
+	for _, ioLosLink := range classofservice.dataSecurityLinesOfService {
+		ioLos, err := GetIOPerformanceLineOfService(classofservice.Client, ioLosLink)
+		if err != nil {
+			collectionError.Failures[ioLosLink] = err
+		} else {
+			result = append(result, ioLos)
+		}
+	}
+
+	if collectionError.Empty() {
+		return result, nil
+	}
+
+	return result, collectionError
 }

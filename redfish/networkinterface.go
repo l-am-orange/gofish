@@ -27,29 +27,20 @@ type NetworkInterface struct {
 
 	// ODataContext is the odata context.
 	ODataContext string `json:"@odata.context"`
-	// ODataEtag is the odata etag.
-	ODataEtag string `json:"@odata.etag"`
 	// ODataType is the odata type.
 	ODataType string `json:"@odata.type"`
 	// Description provides a description of this resource.
 	Description string
-	// networkDeviceFunctions shall be a link to a collection of type
-	// NetworkDeviceFunctionCollection.
-	networkDeviceFunctions []string
-	// NetworkPorts shall be a link to a collection of type NetworkPortCollection.
-	// This property has been deprecated in favor of the Ports property.
-	networkPorts []string
-	// Oem shall contain the OEM extensions. All values for properties that this object contains shall conform to the
-	// Redfish Specification-described requirements.
-	OEM json.RawMessage `json:"Oem"`
-	// Ports shall contain a link to a resource collection of type PortCollection.
-	ports []string
-	// Status shall contain any status or health properties of the resource.
-	Status common.Status
-
 	// networkAdapter shall be a reference to a resource of type NetworkAdapter
 	// that represents the physical container associated with this NetworkInterface.
 	networkAdapter string
+	// networkDeviceFunctions shall be a link to a collection of type
+	// NetworkDeviceFunctionCollection.
+	networkDeviceFunctions string
+	// NetworkPorts shall be a link to a collection of type NetworkPortCollection.
+	networkPorts string
+	// Status shall contain any status or health properties of the resource.
+	Status common.Status
 }
 
 // UnmarshalJSON unmarshals a NetworkInterface object from the raw JSON.
@@ -57,9 +48,8 @@ func (networkinterface *NetworkInterface) UnmarshalJSON(b []byte) error {
 	type temp NetworkInterface
 	var t struct {
 		temp
-		NetworkDeviceFunctions common.LinksCollection
-		NetworkPorts           common.LinksCollection
-		Ports                  common.LinksCollection
+		NetworkDeviceFunctions common.Link
+		NetworkPorts           common.Link
 		Links                  NetworkInterfaceLinks
 	}
 
@@ -71,23 +61,60 @@ func (networkinterface *NetworkInterface) UnmarshalJSON(b []byte) error {
 	// Extract the links to other entities for later
 	*networkinterface = NetworkInterface(t.temp)
 	networkinterface.networkAdapter = t.Links.NetworkAdapter.String()
-
-	networkinterface.networkDeviceFunctions = t.NetworkDeviceFunctions.ToStrings()
-	networkinterface.networkPorts = t.NetworkPorts.ToStrings()
-	networkinterface.ports = t.Ports.ToStrings()
+	networkinterface.networkDeviceFunctions = t.NetworkDeviceFunctions.String()
+	networkinterface.networkPorts = t.NetworkPorts.String()
 
 	return nil
 }
 
 // GetNetworkInterface will get a NetworkInterface instance from the service.
 func GetNetworkInterface(c common.Client, uri string) (*NetworkInterface, error) {
-	return common.GetObject[NetworkInterface](c, uri)
+	var networkInterface NetworkInterface
+	return &networkInterface, networkInterface.Get(c, uri, &networkInterface)
 }
 
 // ListReferencedNetworkInterfaces gets the collection of NetworkInterface from
 // a provided reference.
-func ListReferencedNetworkInterfaces(c common.Client, link string) ([]*NetworkInterface, error) {
-	return common.GetCollectionObjects[NetworkInterface](c, link)
+func ListReferencedNetworkInterfaces(c common.Client, link string) ([]*NetworkInterface, error) { //nolint:dupl
+	var result []*NetworkInterface
+	if link == "" {
+		return result, nil
+	}
+
+	type GetResult struct {
+		Item  *NetworkInterface
+		Link  string
+		Error error
+	}
+
+	ch := make(chan GetResult)
+	collectionError := common.NewCollectionError()
+	get := func(link string) {
+		networkinterface, err := GetNetworkInterface(c, link)
+		ch <- GetResult{Item: networkinterface, Link: link, Error: err}
+	}
+
+	go func() {
+		err := common.CollectList(get, c, link)
+		if err != nil {
+			collectionError.Failures[link] = err
+		}
+		close(ch)
+	}()
+
+	for r := range ch {
+		if r.Error != nil {
+			collectionError.Failures[r.Link] = r.Error
+		} else {
+			result = append(result, r.Item)
+		}
+	}
+
+	if collectionError.Empty() {
+		return result, nil
+	}
+
+	return result, collectionError
 }
 
 // NetworkAdapter gets the NetworkAdapter for this interface.
@@ -96,21 +123,17 @@ func (networkinterface *NetworkInterface) NetworkAdapter() (*NetworkAdapter, err
 		return nil, nil
 	}
 
-	return GetNetworkAdapter(networkinterface.GetClient(), networkinterface.networkAdapter)
+	return GetNetworkAdapter(networkinterface.Client, networkinterface.networkAdapter)
 }
 
 // NetworkDeviceFunctions gets the collection of NetworkDeviceFunctions of this network interface
 func (networkinterface *NetworkInterface) NetworkDeviceFunctions() ([]*NetworkDeviceFunction, error) {
-	return common.GetObjects[NetworkDeviceFunction](networkinterface.GetClient(), networkinterface.networkDeviceFunctions)
+	return ListReferencedNetworkDeviceFunctions(
+		networkinterface.Client, networkinterface.networkDeviceFunctions)
 }
 
 // NetworkPorts gets the collection of NetworkPorts of this network interface
-// This property has been deprecated in favor of the Ports property.
 func (networkinterface *NetworkInterface) NetworkPorts() ([]*NetworkPort, error) {
-	return common.GetObjects[NetworkPort](networkinterface.GetClient(), networkinterface.networkPorts)
-}
-
-// Ports gets the ports associated with this network interface.
-func (networkinterface *NetworkInterface) Ports() ([]*Port, error) {
-	return common.GetObjects[Port](networkinterface.GetClient(), networkinterface.ports)
+	return ListReferencedNetworkPorts(
+		networkinterface.Client, networkinterface.networkPorts)
 }

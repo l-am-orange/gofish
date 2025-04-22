@@ -18,9 +18,6 @@ var processorBody = strings.NewReader(
 		"Assembly":{
 		   "@odata.id":"/redfish/v1/Chassis/System.Embedded.1/Assembly"
 		},
-		"CacheMemory": {
-			"@odata.id": "/redfish/v1/Systems/System.Embedded.1/Processors/CPU.Socket.2/CacheMemory"
-		},
 		"Description":"Represents the properties of a Processor attached to this System",
 		"FPGA": {
 			"ExternalInterfaces": [{
@@ -381,10 +378,6 @@ func TestProcessor(t *testing.T) {
 
 	if result.assembly != "/redfish/v1/Chassis/System.Embedded.1/Assembly" {
 		t.Errorf("Invalid assembly link: %s", result.assembly)
-	}
-
-	if result.cacheMemory != "/redfish/v1/Systems/System.Embedded.1/Processors/CPU.Socket.2/CacheMemory" {
-		t.Errorf("Invalid cache memory link: %s", result.cacheMemory)
 	}
 
 	if result.FPGA.FpgaType != DiscreteFpgaType {

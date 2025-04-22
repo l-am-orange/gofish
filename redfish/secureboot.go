@@ -72,18 +72,19 @@ type SecureBoot struct {
 	// SecureBootMode shall contain the current Secure Boot mode, as defined in
 	// the UEFI Specification.
 	SecureBootMode SecureBootModeType
-	// rawData holds the original serialized JSON so we can compare updates.
-	rawData []byte
-
 	// resetKeysTarget is the URL to send ResetKeys requests.
 	resetKeysTarget string
+	// rawData holds the original serialized JSON so we can compare updates.
+	rawData []byte
 }
 
 // UnmarshalJSON unmarshals a SecureBoot object from the raw JSON.
 func (secureboot *SecureBoot) UnmarshalJSON(b []byte) error {
 	type temp SecureBoot
 	type actions struct {
-		ResetKeys common.ActionTarget `json:"#SecureBoot.ResetKeys"`
+		ResetKeys struct {
+			Target string
+		} `json:"#SecureBoot.ResetKeys"`
 	}
 	var t struct {
 		temp
@@ -127,13 +128,52 @@ func (secureboot *SecureBoot) Update() error {
 
 // GetSecureBoot will get a SecureBoot instance from the service.
 func GetSecureBoot(c common.Client, uri string) (*SecureBoot, error) {
-	return common.GetObject[SecureBoot](c, uri)
+	var secureBoot SecureBoot
+	return &secureBoot, secureBoot.Get(c, uri, &secureBoot)
 }
 
 // ListReferencedSecureBoots gets the collection of SecureBoot from
 // a provided reference.
-func ListReferencedSecureBoots(c common.Client, link string) ([]*SecureBoot, error) {
-	return common.GetCollectionObjects[SecureBoot](c, link)
+func ListReferencedSecureBoots(c common.Client, link string) ([]*SecureBoot, error) { //nolint:dupl
+	var result []*SecureBoot
+	if link == "" {
+		return result, nil
+	}
+
+	type GetResult struct {
+		Item  *SecureBoot
+		Link  string
+		Error error
+	}
+
+	ch := make(chan GetResult)
+	collectionError := common.NewCollectionError()
+	get := func(link string) {
+		secureboot, err := GetSecureBoot(c, link)
+		ch <- GetResult{Item: secureboot, Link: link, Error: err}
+	}
+
+	go func() {
+		err := common.CollectList(get, c, link)
+		if err != nil {
+			collectionError.Failures[link] = err
+		}
+		close(ch)
+	}()
+
+	for r := range ch {
+		if r.Error != nil {
+			collectionError.Failures[r.Link] = r.Error
+		} else {
+			result = append(result, r.Item)
+		}
+	}
+
+	if collectionError.Empty() {
+		return result, nil
+	}
+
+	return result, collectionError
 }
 
 // ResetKeys shall perform a reset of the Secure Boot key databases. The

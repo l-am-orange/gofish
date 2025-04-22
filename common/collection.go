@@ -12,9 +12,8 @@ import (
 
 // Collection represents a collection of entity references.
 type Collection struct {
-	Name            string `json:"Name"`
-	ItemLinks       []string
-	MembersNextLink string `json:"Members@odata.nextLink,omitempty"`
+	Name      string `json:"Name"`
+	ItemLinks []string
 }
 
 // UnmarshalJSON unmarshals a collection from the raw JSON.
@@ -103,24 +102,18 @@ func (cr *CollectionError) Error() string {
 
 // CollectList will retrieve a collection of entities from the Redfish service.
 func CollectList(get func(string), c Client, link string) error {
-	collection, err := GetCollection(c, link)
+	links, err := GetCollection(c, link)
 	if err != nil {
 		return err
 	}
 
-	CollectCollection(get, collection.ItemLinks)
-	if collection.MembersNextLink != "" {
-		err := CollectList(get, c, collection.MembersNextLink)
-		if err != nil {
-			return err
-		}
-	}
+	CollectCollection(get, c, links.ItemLinks)
 	return nil
 }
 
 // CollectCollection will retrieve a collection of entitied from the Redfish service
 // when you already have the set of individual links in the collection.
-func CollectCollection(get func(string), links []string) {
+func CollectCollection(get func(string), c Client, links []string) {
 	// Only allow three concurrent requests to avoid overwhelming the service
 	limiter := make(chan struct{}, 3)
 	var wg sync.WaitGroup
@@ -137,49 +130,4 @@ func CollectCollection(get func(string), links []string) {
 	}
 
 	wg.Wait()
-}
-
-func GetCollectionObjects[T any, PT interface {
-	*T
-	SchemaObject
-}](c Client, uri string) ([]*T, error) {
-	var result []*T
-	if uri == "" {
-		return result, nil
-	}
-
-	type GetResult struct {
-		Item  *T
-		Link  string
-		Error error
-	}
-
-	ch := make(chan GetResult)
-	collectionError := NewCollectionError()
-	get := func(link string) {
-		entity, err := GetObject[T, PT](c, link)
-		ch <- GetResult{Item: entity, Link: link, Error: err}
-	}
-
-	go func() {
-		err := CollectList(get, c, uri)
-		if err != nil {
-			collectionError.Failures[uri] = err
-		}
-		close(ch)
-	}()
-
-	for r := range ch {
-		if r.Error != nil {
-			collectionError.Failures[r.Link] = r.Error
-		} else {
-			result = append(result, r.Item)
-		}
-	}
-
-	if collectionError.Empty() {
-		return result, nil
-	}
-
-	return result, collectionError
 }

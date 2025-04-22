@@ -56,8 +56,12 @@ type Bios struct {
 func (bios *Bios) UnmarshalJSON(b []byte) error {
 	type temp Bios
 	type Actions struct {
-		ChangePassword common.ActionTarget `json:"#Bios.ChangePassword"`
-		ResetBios      common.ActionTarget `json:"#Bios.ResetBios"`
+		ChangePassword struct {
+			Target string
+		} `json:"#Bios.ChangePassword"`
+		ResetBios struct {
+			Target string
+		} `json:"#Bios.ResetBios"`
 	}
 	type Links struct {
 		ActiveSoftwareImage struct {
@@ -99,18 +103,63 @@ func (bios *Bios) UnmarshalJSON(b []byte) error {
 
 // GetBios will get a Bios instance from the service.
 func GetBios(c common.Client, uri string) (*Bios, error) {
-	return common.GetObject[Bios](c, uri)
+	var bios Bios
+	return &bios, bios.Get(c, uri, &bios)
 }
 
 // ListReferencedBioss gets the collection of Bios from a provided reference.
-func ListReferencedBioss(c common.Client, link string) ([]*Bios, error) {
-	return common.GetCollectionObjects[Bios](c, link)
+func ListReferencedBioss(c common.Client, link string) ([]*Bios, error) { //nolint:dupl
+	var result []*Bios
+	if link == "" {
+		return result, nil
+	}
+
+	type GetResult struct {
+		Item  *Bios
+		Link  string
+		Error error
+	}
+
+	ch := make(chan GetResult)
+	collectionError := common.NewCollectionError()
+	get := func(link string) {
+		bios, err := GetBios(c, link)
+		ch <- GetResult{Item: bios, Link: link, Error: err}
+	}
+
+	go func() {
+		err := common.CollectList(get, c, link)
+		if err != nil {
+			collectionError.Failures[link] = err
+		}
+		close(ch)
+	}()
+
+	for r := range ch {
+		if r.Error != nil {
+			collectionError.Failures[r.Link] = r.Error
+		} else {
+			result = append(result, r.Item)
+		}
+	}
+
+	if collectionError.Empty() {
+		return result, nil
+	}
+
+	return result, collectionError
 }
 
 // ChangePassword shall change the selected BIOS password.
 func (bios *Bios) ChangePassword(passwordName, oldPassword, newPassword string) error {
 	if passwordName == "" {
 		return fmt.Errorf("password name must be supplied")
+	}
+	if oldPassword == "" {
+		return fmt.Errorf("existing password must be supplied")
+	}
+	if newPassword == "" {
+		return fmt.Errorf("new password must be supplied")
 	}
 
 	t := struct {
@@ -129,8 +178,7 @@ func (bios *Bios) ChangePassword(passwordName, oldPassword, newPassword string) 
 // A system reset may be required for the default values to be applied. This
 // action may impact other resources.
 func (bios *Bios) ResetBios() error {
-	payload := make(map[string]interface{})
-	return bios.Post(bios.resetBiosTarget, payload)
+	return bios.Post(bios.resetBiosTarget, nil)
 }
 
 // AllowedAttributeUpdateApplyTimes returns the set of allowed apply times to request when
@@ -167,7 +215,7 @@ func (bios *Bios) UpdateBiosAttributesApplyAt(attrs SettingsAttributes, applyTim
 		}
 	}
 
-	resp, err := bios.GetClient().Get(bios.settingsTarget)
+	resp, err := bios.Client.Get(bios.settingsTarget)
 	if err != nil {
 		return err
 	}
@@ -186,7 +234,7 @@ func (bios *Bios) UpdateBiosAttributesApplyAt(attrs SettingsAttributes, applyTim
 			header["If-Match"] = resp.Header["Etag"][0]
 		}
 
-		resp, err = bios.GetClient().PatchWithHeaders(bios.settingsTarget, data, header)
+		resp, err = bios.Client.PatchWithHeaders(bios.settingsTarget, data, header)
 		if err != nil {
 			return err
 		}
@@ -208,5 +256,5 @@ func (bios *Bios) GetActiveSoftwareImage() (*SoftwareInventory, error) {
 		return nil, nil
 	}
 
-	return GetSoftwareInventory(bios.GetClient(), bios.activeSoftwareImage)
+	return GetSoftwareInventory(bios.Client, bios.activeSoftwareImage)
 }
