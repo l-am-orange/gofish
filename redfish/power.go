@@ -446,33 +446,33 @@ type Voltage struct {
 	// LowerThresholdCritical shall indicate
 	// the present reading is below the normal range but is not yet fatal.
 	// Units shall use the same units as the related ReadingVolts property.
-	LowerThresholdCritical float32
+	//LowerThresholdCritical float32
 	// LowerThresholdFatal shall indicate the
 	// present reading is below the normal range and is fatal. Units shall
 	// use the same units as the related ReadingVolts property.
-	LowerThresholdFatal float32
+	//LowerThresholdFatal float32
 	// LowerThresholdNonCritical shall indicate
 	// the present reading is below the normal range but is not critical.
 	// Units shall use the same units as the related ReadingVolts property.
-	LowerThresholdNonCritical float32
+	//LowerThresholdNonCritical float32
 	// MaxReadingRange shall indicate the
 	// highest possible value for ReadingVolts. Units shall use the same
 	// units as the related ReadingVolts property.
-	MaxReadingRange float32
+	//MaxReadingRange float32
 	// MemberID shall uniquely identify the member within the collection. For
 	// services supporting Redfish v1.6 or higher, this value shall be the
 	// zero-based array index.
 	MemberID string `json:"MemberId"`
 	// MinReadingRange shall indicate the lowest possible value for ReadingVolts.
 	// Units shall use the same units as the related ReadingVolts property.
-	MinReadingRange float32
+	//MinReadingRange float32
 	// PhysicalContext shall be a description
 	// of the affected device or region within the chassis to which this
 	// voltage measurement applies.
 	PhysicalContext string
 	// ReadingVolts shall be the present
 	// reading of the voltage sensor's reading.
-	ReadingVolts float32
+	//ReadingVolts float32
 	// SensorNumber shall be a numerical
 	// identifier for this voltage sensor that is unique within this
 	// resource.

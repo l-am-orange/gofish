@@ -490,7 +490,7 @@ func ListReferencedProcessors(c common.Client, link string) ([]*Processor, error
 type ProcessorID struct {
 	// EffectiveFamily shall indicate the effective Family
 	// information as provided by the manufacturer of this processor.
-	EffectiveFamily string
+	EffectiveFamily interface{}
 	// EffectiveModel shall indicate the effective Model
 	// information as provided by the manufacturer of this processor.
 	EffectiveModel string
