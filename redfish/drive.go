@@ -134,9 +134,9 @@ type Drive struct {
 	BlockSizeBytes int
 	// CapableSpeedGbs shall contain fastest capable bus speed of the associated
 	// drive.
-	CapableSpeedGbs float32
+	//CapableSpeedGbs float32 业务中没有此类型 注释掉
 	// CapacityBytes shall contain the raw size in bytes of the associated drive.
-	CapacityBytes int64
+	CapacityBytes float64
 	// Description provides a description of this resource.
 	Description string
 	// EncryptionAbility shall contain the encryption ability for the associated

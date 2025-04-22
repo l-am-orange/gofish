@@ -483,15 +483,15 @@ type Voltage struct {
 	// UpperThresholdCritical shall indicate
 	// the present reading is above the normal range but is not yet fatal.
 	// Units shall use the same units as the related ReadingVolts property.
-	UpperThresholdCritical float32
+	//UpperThresholdCritical float32
 	// UpperThresholdFatal shall indicate the
 	// present reading is above the normal range and is fatal. Units shall
 	// use the same units as the related ReadingVolts property.
-	UpperThresholdFatal float32
+	//UpperThresholdFatal float32
 	// UpperThresholdNonCritical shall indicate
 	// the present reading is above the normal range but is not critical.
 	// Units shall use the same units as the related ReadingVolts property.
-	UpperThresholdNonCritical float32
+	//UpperThresholdNonCritical float32
 }
 
 // UnmarshalJSON unmarshals a Voltage object from the raw JSON.
