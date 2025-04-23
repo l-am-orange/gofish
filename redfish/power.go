@@ -215,7 +215,7 @@ type PowerControl struct {
 	//PowerAvailableWatts float32
 	// PowerCapacityWatts shall represent the total power capacity that is
 	// available for allocation to the chassis resources.
-	PowerCapacityWatts json.Number
+	PowerCapacityWatts interface{}
 	// PowerConsumedWatts shall represent the actual power being consumed (in
 	// Watts) by the chassis.
 	//PowerConsumedWatts float32
@@ -282,7 +282,7 @@ type PowerLimit struct {
 	// LimitInWatts shall represent the power
 	// cap limit in watts for the resource. If set to null, power capping
 	// shall be disabled.
-	LimitInWatts float32
+	LimitInWatts interface{}
 }
 
 // PowerMetric shall contain power metrics for power
@@ -366,7 +366,7 @@ type PowerSupply struct {
 	// PowerCapacityWatts shall contain the maximum amount
 	// of power, in Watts, that the associated power supply is rated to
 	// deliver.
-	PowerCapacityWatts json.Number
+	PowerCapacityWatts interface{}
 	// PowerInputWatts shall contain the value of the
 	// measured input power, in Watts, of the associated power supply.
 	PowerInputWatts float32

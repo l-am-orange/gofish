@@ -493,7 +493,7 @@ type ProcessorID struct {
 	EffectiveFamily interface{}
 	// EffectiveModel shall indicate the effective Model
 	// information as provided by the manufacturer of this processor.
-	EffectiveModel json.Number
+	EffectiveModel interface{}
 	// IdentificationRegisters shall include the raw CPUID
 	// instruction output as provided by the manufacturer of this processor.
 	IdentificationRegisters string

@@ -101,14 +101,14 @@ type Fan struct {
 	// UpperThresholdCritical shall indicate the Reading is above the normal
 	// range but is not yet fatal. The units shall be the same units as the
 	// related Reading property.
-	UpperThresholdCritical float32
+	UpperThresholdCritical interface{}
 	// UpperThresholdFatal shall indicate the Reading is above the normal range
 	// and is fatal. The units shall be the same units as the related Reading property.
-	UpperThresholdFatal float32
+	UpperThresholdFatal interface{}
 	// UpperThresholdNonCritical shall indicate the Reading is above the normal
 	// range but is not critical. The units shall be the same units as the
 	// related Reading property.
-	UpperThresholdNonCritical float32
+	UpperThresholdNonCritical interface{}
 	// Oem shall contain the OEM extensions. All values for properties that
 	// this object contains shall conform to the Redfish Specification
 	// described requirements.
@@ -230,7 +230,7 @@ type Temperature struct {
 	// within the chassis to which this temperature measurement applies.
 	PhysicalContext string
 	// ReadingCelsius shall be the current value of the temperature sensor's reading.
-	ReadingCelsius float32
+	ReadingCelsius interface{}
 	// SensorNumber shall be a numerical identifier for this temperature sensor
 	// that is unique within this resource.
 	SensorNumber float32
@@ -239,22 +239,22 @@ type Temperature struct {
 	// UpperThresholdCritical shall indicate
 	// the ReadingCelsius is above the normal range but is not yet fatal. The
 	// units shall be the same units as the related ReadingCelsius property.
-	UpperThresholdCritical float32
+	UpperThresholdCritical interface{}
 	// UpperThresholdFatal shall indicate the
 	// ReadingCelsius is above the normal range and is fatal. The units shall
 	// be the same units as the related ReadingCelsius property.
-	UpperThresholdFatal float32
+	UpperThresholdFatal interface{}
 	// UpperThresholdNonCritical shall indicate
 	// the ReadingCelsius is above the normal range but is not critical. The
 	// units shall be the same units as the related ReadingCelsius property.
-	UpperThresholdNonCritical float32
+	UpperThresholdNonCritical interface{}
 	// UpperThresholdUser shall contain the value at which
 	// the ReadingCelsius property is above the user-defined range. The
 	// value of the property shall use the same units as the ReadingCelsius
 	// property. The value shall be equal to the value of
 	// UpperThresholdNonCritical, UpperThresholdCritical, or
 	// UpperThresholdFatal, unless set by a user.
-	UpperThresholdUser float32
+	UpperThresholdUser interface{}
 }
 
 // Thermal is used to represent a thermal metrics resource for a Redfish
