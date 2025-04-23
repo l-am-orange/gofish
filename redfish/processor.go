@@ -366,6 +366,7 @@ type Processor struct {
 	pcieFunctions []string
 	// PCIeFunctions@odata.count is
 	PCIeFunctionsCount int
+	OEM                json.RawMessage `json:"Oem"`
 }
 
 // UnmarshalJSON unmarshals a Processor object from the raw JSON.
