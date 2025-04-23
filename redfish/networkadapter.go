@@ -203,6 +203,7 @@ type NetworkAdapter struct {
 	Status common.Status
 	// resetSettingsToDefaultTarget is the URL for sending a ResetSettingsToDefault action
 	resetSettingsToDefaultTarget string
+	OEM                          json.RawMessage `json:"Oem"`
 }
 
 // UnmarshalJSON unmarshals a NetworkAdapter object from the raw JSON.
