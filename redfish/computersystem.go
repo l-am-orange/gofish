@@ -577,6 +577,7 @@ func (computersystem *ComputerSystem) UnmarshalJSON(b []byte) error {
 		SimpleStorage      common.Link
 		SecureBoot         common.Link
 		Storage            common.Link
+		Storages           common.Link //此参数是需要兼容的
 		NetworkInterfaces  common.Link
 		LogServices        common.Link
 		MemoryDomains      common.Link
@@ -592,7 +593,12 @@ func (computersystem *ComputerSystem) UnmarshalJSON(b []byte) error {
 	}
 
 	*computersystem = ComputerSystem(t.temp)
-
+	var storage string
+	if len(t.Storage.String()) > 0 {
+		storage = t.Storage.String()
+	} else if len(t.Storages.String()) > 0 {
+		storage = t.Storages.String()
+	}
 	// Extract the links to other entities for later
 	computersystem.bios = t.Bios.String()
 	computersystem.processors = t.Processors.String()
@@ -601,7 +607,7 @@ func (computersystem *ComputerSystem) UnmarshalJSON(b []byte) error {
 	computersystem.simpleStorage = t.SimpleStorage.String()
 	computersystem.networkInterfaces = t.NetworkInterfaces.String()
 	computersystem.secureBoot = t.SecureBoot.String()
-	computersystem.storage = t.Storage.String()
+	computersystem.storage = storage
 	computersystem.logServices = t.LogServices.String()
 	computersystem.memoryDomains = t.MemoryDomains.String()
 	computersystem.pcieDevices = t.PCIeDevices.ToStrings()
