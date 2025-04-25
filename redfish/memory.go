@@ -331,6 +331,7 @@ type Memory struct {
 	chassis string
 	// rawData holds the original serialized JSON so we can compare updates.
 	rawData []byte
+	Oem     json.RawMessage
 }
 
 // UnmarshalJSON unmarshals a Memory object from the raw JSON.
@@ -345,7 +346,6 @@ func (memory *Memory) UnmarshalJSON(b []byte) error {
 		Assembly common.Link
 		Metrics  common.Link
 	}
-
 	err := json.Unmarshal(b, &t)
 	if err != nil {
 		return err
