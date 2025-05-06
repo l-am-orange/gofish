@@ -464,7 +464,7 @@ func (c *APIClient) runRawRequestWithHeaders(method, url string, payloadBuffer i
 			req.Header.Set("Authorization", fmt.Sprintf("Basic %v", encodedAuth))
 		}
 	}
-	req.Close = true
+	//req.Close = true
 
 	// Dump request if needed.
 	if c.dumpWriter != nil {
